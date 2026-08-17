@@ -1,0 +1,65 @@
+# Distribute a signed Android build to Firebase App Distribution (internal
+# testers).
+#
+# Downloads the published Android artifact, authenticates the Firebase CLI with a
+# Google service-account JSON (Azure secure file), and uploads the .apk to the
+# Firebase app named by $(FirebaseAppId) (from the lane's Android variable group).
+#
+# ⚠ Distribution credentials must be configured before this stage can run. Needs
+# the "Firebase App Distribution" Pipelines > Environment, the service-account
+# secure file, and $(FirebaseAppId) in the variable group — see
+# doc/AzurePipelines.md § "Enabling deployment".
+parameters:
+  - name: applicationEnvironment # 'staging' | 'production' (labels the release)
+    type: string
+  - name: deploymentEnvironment # Azure DevOps Environment name, e.g. 'Firebase App Distribution'
+    type: string
+  - name: androidVariableGroup # supplies $(FirebaseAppId)
+    type: string
+  - name: artifactName # published Android artifact holding the .apk (e.g. Android_Staging)
+    type: string
+  - name: artifactFileName # glob for the apk inside the artifact
+    type: string
+    default: '*.apk'
+  - name: firebaseServiceAccountSecureFile # Google service-account JSON (secure file)
+    type: string
+  - name: testerGroups # comma-separated Firebase tester group aliases
+    type: string
+    default: 'nventive'
+
+jobs:
+  - deployment: Deploy_Android_Firebase_${{ parameters.applicationEnvironment }}
+    displayName: Distribute Android to Firebase App Distribution
+    pool:
+      vmImage: $(ubuntuHostedAgentImage)
+    environment: ${{ parameters.deploymentEnvironment }}
+    variables:
+      - group: ${{ parameters.androidVariableGroup }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - download: current
+              artifact: ${{ parameters.artifactName }}
+
+            - script: npm install -g firebase-tools
+              displayName: Install Firebase CLI
+
+            - task: DownloadSecureFile@1
+              name: firebaseServiceAccount
+              displayName: Download Firebase service account
+              inputs:
+                secureFile: ${{ parameters.firebaseServiceAccountSecureFile }}
+
+            - script: |
+                set -e
+                APK=$(find "$(Pipeline.Workspace)/${{ parameters.artifactName }}" -name '${{ parameters.artifactFileName }}' | head -1)
+                if [ -z "$APK" ]; then echo "No apk matching '${{ parameters.artifactFileName }}' in artifact" >&2; exit 1; fi
+                echo "Distributing $APK to Firebase app $(FirebaseAppId)"
+                firebase appdistribution:distribute "$APK" \
+                  --app "$(FirebaseAppId)" \
+                  --groups "${{ parameters.testerGroups }}" \
+                  --release-notes "ReactNativeApplicationTemplate ${{ parameters.applicationEnvironment }} $(Build.BuildNumber)"
+              env:
+                GOOGLE_APPLICATION_CREDENTIALS: $(firebaseServiceAccount.secureFilePath)
+              displayName: firebase appdistribution:distribute

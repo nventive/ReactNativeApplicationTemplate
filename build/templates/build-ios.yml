@@ -1,0 +1,156 @@
+# Signed iOS build from `expo prebuild` + Xcode (no EAS Build).
+#
+# Certificate + provisioning profile are installed from Azure secure files
+# (manual signing), then xcodebuild archives and exports the .ipa with the
+# lane's exportOptions.plist. Runs on a macOS agent.
+#
+# ⚠ Native signing and build configuration must be set up before this runs —
+# see doc/AzurePipelines.md.
+parameters:
+  - name: environment # 'staging' | 'production' → APP_ENV
+    type: string
+  - name: artifactName
+    type: string
+  - name: certificateSecureFile # shared signing cert, e.g. nventive.p12
+    type: string
+  - name: provisioningProfileSecureFile # bundle-id-named .mobileprovision
+    type: string
+  - name: exportOptionsSecureFile # exportOptions.plist
+    type: string
+  # Firebase iOS config secure file. **Empty (the default) = Firebase OFF**:
+  # no download, no FIREBASE_ENABLED, clean prebuild. Supplying the name is the
+  # single switch that turns Firebase on for this build.
+  - name: firebaseIosSecureFile
+    type: string
+    default: ''
+  - name: bugseeEnabled
+    type: boolean
+    default: false
+
+steps:
+  # Full history so GitVersion can calculate the version (a shallow clone fails).
+  - checkout: self
+    fetchDepth: 0
+
+  # Derive the app version from the Git history: $(MajorMinorPatch) + $(BuildNumber).
+  - template: gitversion.yml
+  - template: build-number.yml
+
+  - task: NodeTool@0
+    displayName: Install Node
+    inputs:
+      versionSpec: $(nodeVersion)
+
+  # Pin Xcode explicitly rather than inheriting the image default. Expo SDK 57 /
+  # RN 0.86 needs Swift 6.2 (Xcode 26+) — the ExpoModulesJSI xcframework build runs
+  # a nested xcodebuild whose SwiftPM resolution fails on the older Swift the image
+  # default may ship. Fail fast (listing installed Xcodes) if the pinned version is
+  # gone after an image bump, instead of a cryptic downstream SwiftPM error.
+  - script: |
+      set -euo pipefail
+      echo "Installed Xcodes:"
+      ls -d /Applications/Xcode_*.app 2>/dev/null || echo "  (none found)"
+      XCODE_APP="/Applications/Xcode_$(xcodeVersion).app"
+      if [ ! -d "$XCODE_APP" ]; then
+        echo "##[error]Pinned Xcode not found at $XCODE_APP (see the list above)."
+        echo "##[error]Update xcodeVersion in build/variables.yml to a version on this image."
+        exit 1
+      fi
+      sudo xcode-select --switch "$XCODE_APP"
+      xcodebuild -version
+      swift --version
+      # The archive targets `generic/platform=iOS`, which needs the iOS DEVICE
+      # platform installed — not just the bundled iphoneos SDK. We pin an Xcode whose
+      # iOS platform ships preinstalled on the image (variables.yml), so this is
+      # normally already present. If a future image drops it (runner-images #13275/
+      # #13853), fall back to the on-demand download rather than failing the archive
+      # 90s later with "iOS <ver> is not installed". `-downloadPlatform` is a no-op
+      # when the platform is already there.
+      echo "iOS SDKs/platforms available:"
+      xcodebuild -showsdks 2>/dev/null || true
+      if ! xcodebuild -showsdks 2>/dev/null | grep -qi 'iphoneos'; then
+        echo "iOS platform not present for $XCODE_APP — downloading (multi-GB, slow)…"
+        xcodebuild -downloadPlatform iOS || sudo xcodebuild -downloadPlatform iOS
+        echo "iOS SDKs/platforms after download:"
+        xcodebuild -showsdks 2>/dev/null || true
+      fi
+    displayName: Select Xcode $(xcodeVersion) & ensure iOS platform
+
+  - task: InstallAppleCertificate@2
+    name: appleCert # exposes $(appleCert.signingIdentity) — the installed cert's CN
+    displayName: Install signing certificate
+    inputs:
+      certSecureFile: ${{ parameters.certificateSecureFile }}
+      certPwd: $(AppleCertificatePassword)
+      keychain: temp
+      deleteCert: true
+      # Keychain-exported .p12 files use legacy PKCS#12 encryption (RC2-40-CBC),
+      # which OpenSSL 3 (on the macOS-26 image) rejects by default. -legacy enables
+      # the legacy provider so the cert parses and installs.
+      opensslPkcsArgs: '-legacy'
+  - task: InstallAppleProvisioningProfile@1
+    name: provProfile
+    displayName: Install provisioning profile
+    inputs:
+      provisioningProfileLocation: secureFiles
+      provProfileSecureFile: ${{ parameters.provisioningProfileSecureFile }}
+
+  - script: yarn install --frozen-lockfile
+    displayName: yarn install
+
+  - template: firebase-config.yml
+    parameters:
+      iosSecureFile: ${{ parameters.firebaseIosSecureFile }}
+
+  # Generates ios/ and runs `pod install` (CocoaPods preinstalled on hosted macOS).
+  # APP_VERSION / APP_BUILD_NUMBER (from GitVersion above) become the iOS
+  # CFBundleShortVersionString / CFBundleVersion. FIREBASE_ENABLED + the
+  # GoogleService-Info path are set ONLY when a Firebase secure file was provided,
+  # so a build without one prebuilds clean.
+  - script: npx expo prebuild --platform ios
+    displayName: expo prebuild (ios)
+    env:
+      APP_ENV: ${{ parameters.environment }}
+      APP_VERSION: $(MajorMinorPatch)
+      APP_BUILD_NUMBER: $(BuildNumber)
+      ${{ if ne(parameters.firebaseIosSecureFile, '') }}:
+        FIREBASE_ENABLED: 'true'
+        IOS_GOOGLE_SERVICES_FILE: '$(Build.SourcesDirectory)/GoogleService-Info.plist'
+      ${{ if parameters.bugseeEnabled }}:
+        BUGSEE_IOS_TOKEN: $(BugseeIosToken)
+
+  - task: DownloadSecureFile@1
+    name: exportOptions
+    displayName: Download exportOptions.plist
+    inputs:
+      secureFile: ${{ parameters.exportOptionsSecureFile }}
+
+  # Manual signing: the identity and profile both come from the install tasks
+  # above. PROVISIONING_PROFILE_SPECIFIER takes the profile UUID that
+  # InstallAppleProvisioningProfile@1 resolved — authoritative and unable to drift
+  # from a hand-typed portal name. (The deprecated PROVISIONING_PROFILE build
+  # setting is intentionally omitted; the specifier is the supported input.)
+  - script: >
+      xcodebuild archive
+      -workspace ios/$(iosScheme).xcworkspace
+      -scheme $(iosScheme)
+      -configuration Release
+      -destination 'generic/platform=iOS'
+      -archivePath "$(Build.ArtifactStagingDirectory)/$(iosScheme).xcarchive"
+      CODE_SIGN_STYLE=Manual
+      CODE_SIGN_IDENTITY="$(appleCert.signingIdentity)"
+      PROVISIONING_PROFILE_SPECIFIER="$(provProfile.provisioningProfileUuid)"
+    displayName: xcodebuild archive (signed)
+
+  - script: >
+      xcodebuild -exportArchive
+      -archivePath "$(Build.ArtifactStagingDirectory)/$(iosScheme).xcarchive"
+      -exportOptionsPlist "$(exportOptions.secureFilePath)"
+      -exportPath "$(Build.ArtifactStagingDirectory)"
+    displayName: xcodebuild export (.ipa)
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish ${{ parameters.artifactName }}
+    inputs:
+      pathToPublish: $(Build.ArtifactStagingDirectory)
+      artifactName: ${{ parameters.artifactName }}

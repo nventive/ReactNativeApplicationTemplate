@@ -1,0 +1,96 @@
+{
+  // Run/Debug profiles for launching the app in a chosen environment.
+  //
+  // Each profile sets the `APP_ENV` build variable, which app.config.ts bakes
+  // into `extra.defaultEnvironment` and the composition root reads at startup
+  // (see doc/Environment.md). This is what selects the data source for the
+  // Dad Jokes sample: `development` serves the MockJokesRepository, while
+  // `staging` / `production` fetch through the real HttpJokesRepository.
+  //
+  // Two flavors per environment:
+  //   • "Metro" runs `expo start`. For a dev build that is already installed on
+  //     a device/emulator, this is the quick way to flip environments: pick the
+  //     env here, then reload the app — expo-constants reads the value from the
+  //     dev-server manifest, so no native rebuild is needed.
+  //   • "Android" runs `expo run:android` — a full native build + install +
+  //     launch. Needs an emulator running or a device connected (and bakes the
+  //     env into that build).
+  //
+  // Profiles run in the integrated terminal, so Expo's interactive keys
+  // (a = open Android, r = reload, j = open the JS debugger, m = menu) work.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Metro: development (mock data)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/expo/bin/cli",
+      "args": ["start"],
+      "env": { "APP_ENV": "development" },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "1-metro", "order": 1 }
+    },
+    {
+      "name": "Metro: staging (real HTTP)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/expo/bin/cli",
+      "args": ["start"],
+      "env": { "APP_ENV": "staging" },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "1-metro", "order": 2 }
+    },
+    {
+      "name": "Metro: production (real HTTP)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/expo/bin/cli",
+      "args": ["start"],
+      "env": { "APP_ENV": "production" },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "1-metro", "order": 3 }
+    },
+    {
+      "name": "Android: development (mock data)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/expo/bin/cli",
+      "args": ["run:android"],
+      "env": { "APP_ENV": "development" },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "2-android", "order": 1 }
+    },
+    {
+      "name": "Android: staging (real HTTP)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/expo/bin/cli",
+      "args": ["run:android"],
+      "env": { "APP_ENV": "staging" },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "2-android", "order": 2 }
+    },
+    {
+      "name": "Android: production (real HTTP)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/expo/bin/cli",
+      "args": ["run:android"],
+      "env": { "APP_ENV": "production" },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "presentation": { "group": "2-android", "order": 3 }
+    }
+  ]
+}

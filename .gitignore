@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Generated native projects (Continuous Native Generation — `expo prebuild`)
+/ios
+/android
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Tests
+coverage/
+junit.xml
+
+# Security scan — generated triage report (scripts/security-audit.mjs); the
+# allowlist under security/ IS committed. See doc/SecurityScan.md.
+security/audit-report.json
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# Local env files
+.env*.local
+
+# Firebase config — real files carry project keys. This repo is public, so
+# only the `.example` placeholders are committed; provide the real files locally
+# and inject them per environment in CI. See doc/FirebaseRemoteConfig.md.
+google-services.json
+GoogleService-Info.plist
+!google-services.json.example
+!GoogleService-Info.plist.example
+
+# TypeScript
+*.tsbuildinfo

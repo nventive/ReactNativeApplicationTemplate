@@ -1,0 +1,53 @@
+# Validates that a PR's commit messages follow the Conventional Commits spec
+# (https://www.conventionalcommits.org/en/v1.0.0/). This is the Azure Repos
+# counterpart to the GitHub `conventional-commits` action
+# (.github/workflows/conventional-commits.yml) — PRs hosted on Azure Repos get
+# the same gate GitHub PRs already have.
+#
+# Implemented in bash (this pipeline's idiom — see mobsf-scan.yml). Runs only on
+# PR builds; on any other trigger the step is skipped, so the enclosing stage/job
+# still succeeds.
+# Keep this stage early so a malformed commit message fails fast, before the
+# longer signed build.
+steps:
+  - script: |
+      set -euo pipefail
+
+      # Azure exposes these as full refs (refs/heads/main); strip the prefix so
+      # the remote-tracking name resolves for either Azure Repos or GitHub.
+      TARGET="${TARGET_BRANCH#refs/heads/}"
+      SOURCE="${SOURCE_BRANCH#refs/heads/}"
+
+      echo "Validating commit messages"
+      echo "  Source branch: $SOURCE"
+      echo "  Target branch: $TARGET"
+
+      git fetch origin --quiet
+      RANGE="origin/$TARGET..origin/$SOURCE"
+      echo "  Commit range:  $RANGE"
+
+      # Conventional Commits, plus the auto-generated merge subjects Azure Repos /
+      # GitHub produce.
+      PATTERN='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?(!)?: .+|^Merged PR [0-9]+: .+|^Merge pull request #[0-9]+ from .+|^Merge branch .+'
+
+      invalid=0
+      while IFS= read -r subject; do
+        [ -z "$subject" ] && continue
+        if echo "$subject" | grep -Eq "$PATTERN"; then
+          echo "  [ok]  $subject"
+        else
+          echo "  [BAD] $subject"
+          invalid=1
+        fi
+      done < <(git log "$RANGE" --pretty=format:%s)
+
+      if [ "$invalid" -ne 0 ]; then
+        echo "##vso[task.logissue type=error]One or more commit messages do not follow the Conventional Commits standard."
+        exit 1
+      fi
+      echo "All commit messages follow Conventional Commits."
+    displayName: Validate commit messages
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    env:
+      TARGET_BRANCH: $(System.PullRequest.TargetBranch)
+      SOURCE_BRANCH: $(System.PullRequest.SourceBranch)

@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "PLACEHOLDER — not a real Firebase config. Copy this file to 'google-services.json'",
+    "(gitignored) and replace every value with your own Firebase Android app config,",
+    "downloaded from the Firebase console. In CI, inject the real file per lane",
+    "instead of committing it. See doc/FirebaseRemoteConfig.md. Firebase is opt-in:",
+    "set FIREBASE_ENABLED=true so app.config.ts wires this file into the build."
+  ],
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "your-firebase-project-id",
+    "storage_bucket": "your-firebase-project-id.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.nventive.internal.reactnativeapptemplate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [{ "current_key": "REPLACE_WITH_YOUR_ANDROID_FIREBASE_API_KEY" }],
+      "services": {
+        "appinvite_service": { "other_platform_oauth_client": [] }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

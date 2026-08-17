@@ -1,0 +1,152 @@
+# Shared pipeline variables. Included by build/azure-pipelines.yml as a variable
+# template (list form, so it composes with per-stage variable groups).
+#
+# Secrets live in Azure DevOps **variable groups** and **secure files**, never
+# here (this repo is public). The groups/files are documented at the bottom; the
+# per-lane names are passed as template parameters from azure-pipelines.yml.
+
+variables:
+  # Toolchain — keep in step with package.json (Expo SDK 57 / RN 0.86 / Node 22).
+  - name: nodeVersion
+    value: '22.x'
+  - name: javaVersion
+    value: '17'
+
+  # Hosted agent images. Pinned to a concrete version (never the floating
+  # `-latest` alias) so the toolchain can't shift under us without a deliberate bump.
+  - name: ubuntuHostedAgentImage
+    value: 'ubuntu-22.04'
+  - name: macOSHostedAgentImage
+    value: 'macOS-26'
+
+  # Xcode is pinned explicitly instead of inheriting the image default (which
+  # auto-updates and would break the build with no change on our side). Expo SDK 57
+  # / RN 0.86 native tooling needs Swift 6.2 (Xcode 26+): the ExpoModulesJSI
+  # xcframework build runs a nested `xcodebuild` whose SwiftPM resolution fails on
+  # Swift 6.1 (the Xcode 16.4 default). build-ios.yml selects
+  # /Applications/Xcode_$(xcodeVersion).app and fails fast (listing what's installed)
+  # if it's absent — so a version drop on a future image is an obvious one-line fix.
+  #
+  # Pick a version that (a) exists on the image and (b) has its iOS device platform
+  # PREINSTALLED. On macOS-26 the Xcode app is present but its matching iOS platform
+  # is NOT always baked in (actions/runner-images #13275, #13853) — the archive then
+  # dies with "iOS <ver> is not installed", and the on-demand download is multi-GB
+  # and flaky. As of this image, iOS 26.2 / 26.4 / 26.5 are preinstalled; 26.0 / 26.1
+  # are not. So we pin 26.2 (Swift 6.2, iOS 26.2 already on the image → no download).
+  # Note the app path uses the marketing version verbatim: '26.2' → Xcode_26.2.app,
+  # but a patch release is '26.0.1' → Xcode_26.0.1.app (there is NO Xcode_26.0.app).
+  # Bump the image + this together, keeping to a version whose iOS platform ships
+  # preinstalled (check the image's iOS Simulator list in its runner-images Readme).
+  - name: xcodeVersion
+    value: '26.2'
+
+  # iOS scheme/workspace name derived by `expo prebuild` from the sanitized
+  # `name` in app.config.ts. Update if the app is renamed (the project generator
+  # does this automatically).
+  - name: iosScheme
+    value: 'ReactNativeAppTemplate'
+
+  # One-time offset added to GitVersion's PreReleaseNumber to form the native
+  # build number (Android versionCode / iOS CFBundleVersion). Leave at 0; bump it
+  # once if a store already holds a higher build number than a fresh version
+  # stream would produce, so new uploads keep climbing. See build-number.yml and
+  # doc/AzurePipelines.md § "Versioning".
+  - name: BuildPadding
+    value: 0
+
+  # True on PR validation runs — release stages are skipped to save CI time.
+  - name: IsPullRequestBuild
+    value: $[eq(variables['Build.Reason'], 'PullRequest')]
+  # True on the release branch (production builds only run here).
+  - name: IsReleaseBranch
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+
+  # Binary SAST (MobSF) — a dockerized Mobile Security Framework server that runs
+  # static analysis over the signed .apk/.aab/.ipa in the Security_Scan_* stages.
+  # See doc/SecurityScan.md § "Binary SAST (MobSF)".
+  - name: dockerVersion
+    # Docker CLI version DockerInstaller@0 ensures on the agent. Bump deliberately.
+    value: '25.0.5'
+  - name: mobsfImageTag
+    # MobSF publishes rolling images. Pin to a concrete version tag (or a @sha256
+    # digest) from Docker Hub for reproducibility, matching the pin-everything
+    # policy above; `latest` is the seam default so a fresh clone works before you
+    # pin. https://hub.docker.com/r/opensecurity/mobile-security-framework-mobsf
+    value: 'latest'
+  - name: mobSfApiKey
+    # NOT a secret. This is the API key of the throwaway MobSF container we start
+    # on the agent (MobSF would otherwise randomize it at boot); it only
+    # authenticates our own requests to the local server on :8000 and never leaves
+    # the agent. Any non-empty string works.
+    # https://mobsf.github.io/docs/#/extras?id=extra-features
+    value: '8181'
+
+# ---------------------------------------------------------------------------
+# Azure DevOps Library — the EXACT names the pipeline consumes. Full setup table
+# (which stage links what, secret flags, secure-file lane mapping) is in
+# doc/AzurePipelines.md § "Azure DevOps Library reference". Only the variables
+# listed here are read by the templates — add no others.
+#
+# Variable groups (Pipelines > Library > Variable groups):
+#
+#   ReactNativeApplicationTemplate.Distribution.Internal.Android   (linked to Build_Staging)
+#   ReactNativeApplicationTemplate.Distribution.GooglePlay         (linked to Build_Production)
+#     AndroidSigningStorePassword   (secret)   -> $(AndroidSigningStorePassword)
+#     AndroidSigningKeyAlias                    -> $(AndroidSigningKeyAlias)
+#     AndroidSigningKeyPassword     (secret)   -> $(AndroidSigningKeyPassword)
+#     # deployment-only (needed only when the deploy stages are enabled):
+#     FirebaseAppId                             -> $(FirebaseAppId)               # per-lane Firebase Android app id
+#     ApplicationIdentifier                     -> $(ApplicationIdentifier)       # GooglePlay group only (Play upload)
+#     GooglePlayServiceConnection               -> $(GooglePlayServiceConnection) # GooglePlay group only (connection name)
+#
+#   ReactNativeApplicationTemplate.Distribution.Internal.iOS       (linked to Build_Staging)
+#   ReactNativeApplicationTemplate.Distribution.AppStore           (linked to Build_Production)
+#     AppleCertificatePassword      (secret)   -> $(AppleCertificatePassword)
+#     # NB: the other two iOS signing values are NOT variables — the install tasks
+#     # output them, so no provisioning-profile-name variable is needed:
+#     #   signing identity -> $(appleCert.signingIdentity)             (InstallAppleCertificate@2)
+#     #   profile UUID     -> $(provProfile.provisioningProfileUuid)   (InstallAppleProvisioningProfile@1; used as PROVISIONING_PROFILE_SPECIFIER)
+#     # deployment-only (needed only when the TestFlight/AppStore deploy stages are enabled):
+#     AppStoreServiceConnection                 -> $(AppStoreServiceConnection)   # connection name
+#     ApplicationIdentifier                     -> $(ApplicationIdentifier)       # app bundle id
+#     AppleTeamId                               -> $(AppleTeamId)
+#     AppleTeamName                             -> $(AppleTeamName)
+#     AppleStoreConnectIdentifier               -> $(AppleStoreConnectIdentifier) # app-specific id (bypasses 2FA)
+#     AppleAppSpecificPassword      (secret)   -> $(AppleAppSpecificPassword)
+#
+#   ReactNativeApplicationTemplate.Bugsee.Tokens  (linked to Build_Staging ONLY —
+#     never to Build_Production, so the token is absent on store builds and Bugsee
+#     stays dormant; doc/CrashReporting.md)
+#     BugseeAndroidToken   (secret)   -> $(BugseeAndroidToken)
+#     BugseeIosToken       (secret)   -> $(BugseeIosToken)
+#
+# Service connections (Project settings > Service connections) — deployment only:
+#   Apple App Store Connect  -> its name stored in $(AppStoreServiceConnection)   (needs the "Apple App Store" extension)
+#   Google Play              -> its name stored in $(GooglePlayServiceConnection) (needs the "Google Play" extension)
+#
+# Deployment environments (Pipelines > Environments) — created on first deploy, add
+# approvals/checks here: "Firebase App Distribution", "TestFlight", "AppStore",
+# "GooglePlay". The four deploy stages ship commented out; see
+# doc/AzurePipelines.md § "Enabling deployment".
+#
+# Secure files (Pipelines > Library > Secure files) — bundle-id-named. The
+# `.internal.` segment marks the staging lane; the production names drop it. The
+# iOS signing cert is a single SHARED file
+# (`nventive.p12`, the nventive Apple-account distribution cert used for both
+# lanes — it signs both provisioning profiles). Keystores are `.jks`.
+#                       staging (internal)                                 |  production
+#   Android keystore:   com.nventive.internal.reactnativeapptemplate.jks   |  com.nventive.reactnativeapptemplate.jks
+#   iOS signing cert:   nventive.p12                                       |  nventive.p12  (same file)
+#   iOS provisioning:   com.nventive.internal.reactnativeapptemplate.mobileprovision            |  com.nventive.reactnativeapptemplate.mobileprovision
+#   iOS export opts:    com.nventive.internal.reactnativeapptemplate.exportOptions.plist        |  com.nventive.reactnativeapptemplate.exportOptions.plist
+# Firebase config files are OPTIONAL and off by default — the firebase*SecureFile
+# lines are commented out in azure-pipelines.yml. Upload these + uncomment to
+# enable (doc/AzurePipelines.md § "Enabling Firebase"):
+#   Firebase (Android): google-services-reactnative-internal.json          |  google-services-reactnative.json
+#   Firebase (iOS):     GoogleService-Info-reactnative-internal.plist      |  GoogleService-Info-reactnative.plist
+#
+# Deployment secure file (only when the Firebase App Distribution deploy stage is
+# enabled) — a Google service-account JSON, one file for both lanes:
+#   Firebase App Distribution: firebase-app-distribution-service-account.json
+#
+# ---------------------------------------------------------------------------

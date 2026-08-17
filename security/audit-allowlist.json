@@ -1,0 +1,11 @@
+{
+  "_comment": "Triage allowlist for scripts/security-audit.mjs. Accept an advisory ONLY with a written rationale and an expiry date (YYYY-MM-DD) that forces re-review. See doc/SecurityScan.md. Match by numeric `id`, GHSA `ghsa`, or `module`.",
+  "_exampleEntry": {
+    "ghsa": "GHSA-xxxx-xxxx-xxxx",
+    "module": "some-transitive-dep",
+    "reason": "Dev-only transitive of the Expo CLI; not reachable at runtime. Awaiting upstream bump.",
+    "expires": "2026-12-31"
+  },
+  "threshold": "high",
+  "advisories": []
+}

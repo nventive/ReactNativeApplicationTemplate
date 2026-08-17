@@ -1,0 +1,178 @@
+{
+  "jokes": {
+    "title": "Blagues de Papa",
+    "detailTitle": "Blague",
+    "openModal": "Ouvrir la fenêtre d'exemple",
+    "loadError": "Une erreur est survenue lors du chargement des blagues.",
+    "unavailable": "Cette blague n'est plus disponible.",
+    "addFavorite": "Ajouter aux favoris",
+    "removeFavorite": "Retirer des favoris"
+  },
+  "favorites": {
+    "title": "Favoris",
+    "empty": "Aucun favori pour le moment. Touchez une blague pour l'ajouter."
+  },
+  "modal": {
+    "title": "Fenêtre d'exemple",
+    "body": "Cet écran est présenté en mode modal depuis la pile racine. Fermez-le avec l'en-tête, un glissement ou le bouton ci-dessous.",
+    "close": "Fermer"
+  },
+  "feedback": {
+    "title": "Commentaires",
+    "open": "Donner votre avis",
+    "intro": "Dites-nous ce que vous en pensez. Ce formulaire d'exemple illustre le modèle de validation react-hook-form + zod.",
+    "name": "Nom",
+    "email": "Courriel",
+    "message": "Message",
+    "submit": "Envoyer les commentaires",
+    "close": "Fermer",
+    "successTitle": "Merci pour vos commentaires !",
+    "successBody": "Cet exemple n'envoie rien — il illustre le modèle de formulaire et de validation.",
+    "errors": {
+      "nameRequired": "Veuillez saisir votre nom.",
+      "nameTooLong": "Le nom doit contenir au plus 80 caractères.",
+      "emailInvalid": "Veuillez saisir une adresse courriel valide.",
+      "messageTooShort": "Le message doit contenir au moins 10 caractères.",
+      "messageTooLong": "Le message doit contenir au plus 500 caractères."
+    }
+  },
+  "errorBoundary": {
+    "title": "Une erreur est survenue",
+    "message": "Une erreur inattendue s'est produite. Veuillez réessayer."
+  },
+  "common": {
+    "retry": "Réessayer",
+    "networkError": "Vous semblez être hors ligne. Vérifiez votre connexion et réessayez.",
+    "genericError": "Une erreur est survenue. Veuillez réessayer.",
+    "error": "Erreur : {{error}}",
+    "on": "activé",
+    "off": "désactivé"
+  },
+  "forcedUpdate": {
+    "title": "Mise à jour forcée",
+    "message": "Une mise à jour est nécessaire pour continuer à utiliser l'application.",
+    "button": "Mettre à jour",
+    "urlLaunchError": "Impossible de lancer {{url}}"
+  },
+  "killSwitch": {
+    "title": "Kill Switch",
+    "message": "L'application n'est pas disponible pour le moment, veuillez revenir plus tard."
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "launcher": "Diagnostics",
+    "close": "Fermer",
+    "back": "Retour",
+    "dismiss": "Masquer pour cette session",
+    "disable": "Désactiver les diagnostics",
+    "restartRequired": "Redémarrez l'application pour appliquer ce changement.",
+    "tools": {
+      "title": "Outils",
+      "logConsole": "Console de journaux",
+      "network": "Inspecteur réseau"
+    },
+    "appInfo": {
+      "title": "Infos de l'application",
+      "name": "Nom : {{name}}",
+      "version": "Version : {{version}} ({{buildNumber}})",
+      "bundleId": "Identifiant du bundle : {{bundleId}}",
+      "platform": "Plateforme : {{platform}}",
+      "osVersion": "Version de l'OS : {{osVersion}}"
+    },
+    "theme": {
+      "title": "Thème",
+      "hint": "Changez l'apparence de l'application. « Système » suit le réglage clair/sombre de votre appareil.",
+      "system": "Système",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "environment": {
+      "title": "Environnement",
+      "current": "Actuel : {{name}}",
+      "pending": "En attente au redémarrage : {{name}}"
+    },
+    "logging": {
+      "title": "Journalisation",
+      "console": "Journalisation console",
+      "consoleHint": "Écrit dans la console de l'appareil — visible via USB avec adb logcat / Xcode / Metro.",
+      "file": "Journalisation fichier",
+      "fileHint": "Écrit dans un fichier journal que vous pouvez partager ci-dessous.",
+      "generate": "Générer des journaux de test",
+      "share": "Partager le fichier journal",
+      "clear": "Effacer le fichier journal",
+      "unavailable": "La journalisation fichier est désactivée — activez-la ci-dessus et redémarrez pour écrire un fichier journal.",
+      "empty": "Le fichier journal est vide.",
+      "generated": "Journaux de test écrits.",
+      "cleared": "Fichier journal effacé.",
+      "shareUnavailable": "Le partage n'est pas disponible sur cet appareil.",
+      "shareError": "Impossible de partager les journaux."
+    },
+    "logConsole": {
+      "title": "Console de journaux",
+      "empty": "Aucune entrée de journal capturée pour le moment.",
+      "unavailable": "La console de journaux intégrée n'est pas disponible dans cet environnement.",
+      "clear": "Vider la console",
+      "filters": {
+        "all": "Tous",
+        "network": "Réseau",
+        "debug": "Debug+",
+        "info": "Info+",
+        "warn": "Warn+",
+        "error": "Error+"
+      },
+      "levels": {
+        "trace": "TRACE",
+        "debug": "DEBUG",
+        "info": "INFO",
+        "warn": "WARN",
+        "error": "ERROR",
+        "fatal": "FATAL"
+      }
+    },
+    "network": {
+      "title": "Inspecteur réseau",
+      "detailTitle": "Détail de la requête",
+      "empty": "Aucune requête capturée pour le moment.",
+      "unavailable": "L'inspecteur réseau n'est pas disponible dans cet environnement.",
+      "notFound": "Cette requête n'est plus disponible.",
+      "clear": "Effacer",
+      "method": "Méthode",
+      "url": "URL",
+      "state": "État",
+      "status": "Statut",
+      "duration": "Durée",
+      "durationValue": "{{ms}} ms",
+      "error": "Erreur",
+      "requestHeaders": "En-têtes de requête",
+      "requestBody": "Corps de la requête",
+      "responseHeaders": "En-têtes de réponse",
+      "responseBody": "Corps de la réponse",
+      "noHeaders": "(aucun)",
+      "noBody": "(aucun corps)",
+      "states": {
+        "pending": "En attente",
+        "success": "Succès",
+        "failure": "Échec"
+      }
+    },
+    "mocking": {
+      "title": "Données fictives",
+      "label": "Utiliser des sources de données fictives",
+      "hint": "Exécute l'application entièrement hors ligne avec des données en mémoire."
+    },
+    "remoteConfig": {
+      "title": "Configuration distante",
+      "triggerForcedUpdate": "Forcer une mise à jour",
+      "clearForcedUpdate": "Annuler la mise à jour forcée",
+      "toggleKillSwitch": "Basculer le kill switch",
+      "killSwitchState": "Kill switch : {{state}}",
+      "unavailable": "Activez les données fictives pour contrôler la configuration distante."
+    },
+    "crashReporting": {
+      "title": "Rapports de plantage",
+      "enabled": "Bugsee est actif pour cette version interne.",
+      "disabled": "Les rapports de plantage sont désactivés (version de production ou jeton absent).",
+      "logTestException": "Envoyer une exception de test"
+    }
+  }
+}

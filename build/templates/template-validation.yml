@@ -1,0 +1,103 @@
+# Steps that validate the PROJECT GENERATOR end to end: run `yarn generate`
+# against a throwaway copy of the checkout, then run the generated app's own
+# verify loop and a native Android Release compile on the OUTPUT.
+#
+# Consumed only by the `Template_Validation` stage in build/azure-pipelines.yml,
+# which is bracketed by `template-only` markers there. `yarn generate` strips
+# that stage from the pipeline and deletes THIS template (it is listed in
+# TEMPLATE_ONLY_PATHS, cli/generate.ts), so neither ships inside a generated app.
+#
+# WHY it exists — the generator self-modifies the project (substitutes the app
+# identifiers everywhere, deletes cli/ + the governance files, un-wires its own
+# package.json / jest.config.js hooks). The rest of the pipeline always builds
+# the template as-is and never exercises any of that, so a regression in the
+# generator would otherwise ship broken in every freshly generated app while the
+# template's own CI stayed green.
+#
+# WHY Android only, unsigned — the delta the generator introduces is in the
+# JS/TS + config layer; one native compile is enough to catch a rename that
+# breaks `expo prebuild` or Gradle. Android needs no secrets (Expo's generated
+# release buildType signs with the auto-generated debug keystore), so this runs
+# on fork PRs too. Requires `generatedAppDir` to be set by the calling job.
+steps:
+  - checkout: self
+
+  - task: NodeTool@0
+    displayName: Install Node
+    inputs:
+      versionSpec: $(nodeVersion)
+  - task: JavaToolInstaller@0
+    displayName: Install JDK
+    inputs:
+      versionSpec: $(javaVersion)
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  # Install the template's own deps so `node cli/index.ts` — and the Prettier
+  # pass the generator runs — are available to drive generation.
+  - script: yarn install --frozen-lockfile
+    displayName: yarn install (template)
+
+  # Copy the checkout to a throwaway app dir, excluding the heavy / generated
+  # trees. rsync is preinstalled on the ubuntu image; the dir lives outside the
+  # sources dir so it is not itself copied.
+  - script: |
+      set -euo pipefail
+      mkdir -p "$(generatedAppDir)"
+      rsync -a --delete \
+        --exclude='.git' \
+        --exclude='node_modules' \
+        --exclude='android' \
+        --exclude='ios' \
+        --exclude='.expo' \
+        --exclude='coverage' \
+        --exclude='dist' \
+        ./ "$(generatedAppDir)/"
+    displayName: Copy checkout → GeneratedApp
+
+  # Run the generator against the copy exactly as a real consumer would: --dir
+  # points it at the throwaway tree, where it substitutes the identifiers,
+  # rewrites the README, removes the template-only files (this stage included),
+  # and un-wires its own tooling. Run from the template checkout so Node resolves
+  # the generator's Prettier import from the deps installed above.
+  - script: >
+      node cli/index.ts
+      --name "Generated App"
+      --bundle-id com.nventive.generatedapp
+      --dir "$(generatedAppDir)"
+    displayName: yarn generate (into GeneratedApp)
+
+  # Everything below operates on the GENERATED app, not the template. yarn.lock is
+  # unchanged (only identifiers / scripts moved), so a frozen install still
+  # resolves cleanly.
+  - script: yarn install --frozen-lockfile
+    displayName: yarn install (generated)
+    workingDirectory: $(generatedAppDir)
+
+  # The generated project's OWN quality gates. cli/ is gone, so the typecheck no
+  # longer carries the cli tsconfig and jest no longer has the cli root — green
+  # here proves the un-wiring left the project sound.
+  - script: yarn typecheck
+    displayName: yarn typecheck (generated)
+    workingDirectory: $(generatedAppDir)
+  - script: yarn lint
+    displayName: yarn lint (generated)
+    workingDirectory: $(generatedAppDir)
+  - script: yarn test --ci
+    displayName: yarn test (generated)
+    workingDirectory: $(generatedAppDir)
+
+  # Regenerate android/ from the RENAMED app.config.ts. No GitVersion:
+  # app.config.ts falls back to version 1.0.0 / build 1 without the env vars,
+  # which is all a compile check needs.
+  - script: npx expo prebuild --platform android --no-install
+    displayName: expo prebuild (android)
+    workingDirectory: $(generatedAppDir)
+    env:
+      APP_ENV: staging
+
+  # The native gate: an UNSIGNED Release compile. A rename that breaks prebuild or
+  # the Gradle build fails right here.
+  - script: ./gradlew :app:assembleRelease
+    displayName: gradlew assembleRelease (unsigned)
+    workingDirectory: $(generatedAppDir)/android

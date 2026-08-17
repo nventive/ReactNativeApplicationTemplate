@@ -1,0 +1,32 @@
+# Downloads the per-lane Firebase config secure files and copies them to the
+# repo paths app.config.ts expects (google-services.json / GoogleService-Info.plist).
+# The caller sets FIREBASE_ENABLED=true so app.config.ts wires the plugin +
+# googleServicesFile during `expo prebuild`.
+#
+# Skipped entirely when the secure-file names are empty (a lane without Firebase
+# prebuilds clean, with no native Firebase footprint).
+parameters:
+  - name: androidSecureFile
+    type: string
+    default: ''
+  - name: iosSecureFile
+    type: string
+    default: ''
+
+steps:
+  - ${{ if ne(parameters.androidSecureFile, '') }}:
+      - task: DownloadSecureFile@1
+        name: googleServicesJson
+        displayName: Download google-services.json
+        inputs:
+          secureFile: ${{ parameters.androidSecureFile }}
+      - script: cp "$(googleServicesJson.secureFilePath)" "$(Build.SourcesDirectory)/google-services.json"
+        displayName: Place google-services.json
+  - ${{ if ne(parameters.iosSecureFile, '') }}:
+      - task: DownloadSecureFile@1
+        name: googleServiceInfoPlist
+        displayName: Download GoogleService-Info.plist
+        inputs:
+          secureFile: ${{ parameters.iosSecureFile }}
+      - script: cp "$(googleServiceInfoPlist.secureFilePath)" "$(Build.SourcesDirectory)/GoogleService-Info.plist"
+        displayName: Place GoogleService-Info.plist

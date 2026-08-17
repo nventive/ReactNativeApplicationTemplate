@@ -1,0 +1,29 @@
+# Tier-3 smoke — favoriting a joke on the list shows it on the Favorites tab.
+# This exercises the real gesture path and the cross-screen RxJS source of truth
+# (favorites$) end to end on a device.
+appId: com.nventive.internal.reactnativeapptemplate
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: 'DadJokesContainer'
+# Favorites start empty.
+- tapOn:
+    id: 'FavoritesTab'
+- assertVisible:
+    id: 'FavoritesEmpty'
+- tapOn:
+    id: 'JokesTab'
+# Tapping a joke row toggles its favorite state.
+- tapOn:
+    id: 'JokeListItem-.*'
+    index: 0
+# The favorited joke now appears on the Favorites tab.
+- tapOn:
+    id: 'FavoritesTab'
+- assertVisible:
+    id: 'FavoritesContainer'
+- assertNotVisible:
+    id: 'FavoritesEmpty'

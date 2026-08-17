@@ -1,0 +1,49 @@
+# Publish a signed Android App Bundle (.aab) to Google Play. Defaults to the
+# **internal** track — promotion to production stays a manual step in the Play
+# Console.
+#
+# Uses the GooglePlayRelease@4 task (the "Google Play" Azure DevOps extension),
+# authenticated by a Google Play service connection named in
+# $(GooglePlayServiceConnection). $(ApplicationIdentifier) comes from the lane's
+# Android variable group.
+#
+# ⚠ Store credentials must be configured before this stage can run. Needs the
+# extension, the service connection, $(ApplicationIdentifier) in the group, and
+# the Pipelines > Environment — see doc/AzurePipelines.md § "Enabling deployment".
+parameters:
+  - name: applicationEnvironment # 'production'
+    type: string
+  - name: deploymentEnvironment # Azure DevOps Environment name, e.g. 'GooglePlay'
+    type: string
+  - name: androidVariableGroup # supplies $(ApplicationIdentifier) + $(GooglePlayServiceConnection)
+    type: string
+  - name: artifactName # published Android artifact holding the .aab (e.g. Android_Production)
+    type: string
+  - name: track # Play track: 'internal' | 'alpha' | 'beta' | 'production'
+    type: string
+    default: 'internal'
+
+jobs:
+  - deployment: Deploy_Android_GooglePlay
+    displayName: Publish Android to Google Play (${{ parameters.track }})
+    pool:
+      vmImage: $(ubuntuHostedAgentImage)
+    environment: ${{ parameters.deploymentEnvironment }}
+    variables:
+      - group: ${{ parameters.androidVariableGroup }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - download: current
+              artifact: ${{ parameters.artifactName }}
+
+            - task: GooglePlayRelease@4
+              displayName: Upload AAB to Google Play
+              inputs:
+                serviceConnection: $(GooglePlayServiceConnection)
+                applicationId: $(ApplicationIdentifier)
+                action: 'SingleBundle'
+                bundleFile: '$(Pipeline.Workspace)/${{ parameters.artifactName }}/*.aab'
+                track: ${{ parameters.track }}
+                changesNotSentForReview: true

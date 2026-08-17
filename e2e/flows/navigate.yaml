@@ -1,0 +1,30 @@
+# Tier-3 smoke — the navigation shell: push a detail screen and return, then
+# present and dismiss the example modal. These are the native-stack / modal
+# transitions and the Android back button that only a device truly exercises.
+appId: com.nventive.internal.reactnativeapptemplate
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: 'DadJokesContainer'
+# Push the detail screen via the first row's chevron.
+- tapOn:
+    id: 'JokeDetailButton-.*'
+    index: 0
+- assertVisible:
+    id: 'JokeDetail'
+- assertVisible:
+    id: 'ToggleFavoriteButton'
+- back
+- assertVisible:
+    id: 'DadJokesContainer'
+# Present the example modal from the list header, then dismiss it.
+- tapOn:
+    id: 'OpenModalButton'
+- assertVisible:
+    id: 'ExampleModal'
+- tapOn: 'Close'
+- assertVisible:
+    id: 'DadJokesContainer'

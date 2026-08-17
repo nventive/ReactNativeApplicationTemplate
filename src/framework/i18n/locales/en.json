@@ -1,0 +1,178 @@
+{
+  "jokes": {
+    "title": "Dad Jokes",
+    "detailTitle": "Joke",
+    "openModal": "Open example modal",
+    "loadError": "Something went wrong while loading jokes.",
+    "unavailable": "This joke is no longer available.",
+    "addFavorite": "Add to favorites",
+    "removeFavorite": "Remove from favorites"
+  },
+  "favorites": {
+    "title": "Favorites",
+    "empty": "No favorites yet. Tap a joke to add it."
+  },
+  "modal": {
+    "title": "Example modal",
+    "body": "This screen is presented modally from the root stack. Dismiss it with the header, a swipe, or the button below.",
+    "close": "Close"
+  },
+  "feedback": {
+    "title": "Feedback",
+    "open": "Give feedback",
+    "intro": "Tell us what you think. This example form shows the react-hook-form + zod validation pattern.",
+    "name": "Name",
+    "email": "Email",
+    "message": "Message",
+    "submit": "Send feedback",
+    "close": "Close",
+    "successTitle": "Thanks for your feedback!",
+    "successBody": "This example does not send anywhere — it demonstrates the form and validation pattern.",
+    "errors": {
+      "nameRequired": "Please enter your name.",
+      "nameTooLong": "Name must be at most 80 characters.",
+      "emailInvalid": "Please enter a valid email address.",
+      "messageTooShort": "Message must be at least 10 characters.",
+      "messageTooLong": "Message must be at most 500 characters."
+    }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "message": "An unexpected error occurred. Please try again."
+  },
+  "common": {
+    "retry": "Try again",
+    "networkError": "You appear to be offline. Check your connection and try again.",
+    "genericError": "Something went wrong. Please try again.",
+    "error": "Error: {{error}}",
+    "on": "on",
+    "off": "off"
+  },
+  "forcedUpdate": {
+    "title": "Forced Update",
+    "message": "An update is required to continue using the application.",
+    "button": "Update",
+    "urlLaunchError": "Could not launch {{url}}"
+  },
+  "killSwitch": {
+    "title": "Kill Switch",
+    "message": "The app is not available at the moment, please come back later."
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "launcher": "Diagnostics",
+    "close": "Close",
+    "back": "Back",
+    "dismiss": "Hide for this session",
+    "disable": "Disable diagnostics",
+    "restartRequired": "Restart the app to apply this change.",
+    "tools": {
+      "title": "Tools",
+      "logConsole": "Log console",
+      "network": "Network inspector"
+    },
+    "appInfo": {
+      "title": "App info",
+      "name": "Name: {{name}}",
+      "version": "Version: {{version}} ({{buildNumber}})",
+      "bundleId": "Bundle ID: {{bundleId}}",
+      "platform": "Platform: {{platform}}",
+      "osVersion": "OS version: {{osVersion}}"
+    },
+    "theme": {
+      "title": "Theme",
+      "hint": "Switch the app appearance. System follows your device's light/dark setting.",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "environment": {
+      "title": "Environment",
+      "current": "Current: {{name}}",
+      "pending": "Pending on restart: {{name}}"
+    },
+    "logging": {
+      "title": "Logging",
+      "console": "Console logging",
+      "consoleHint": "Writes to the device console — visible over USB via adb logcat / Xcode / Metro.",
+      "file": "File logging",
+      "fileHint": "Writes to a log file you can share below.",
+      "generate": "Generate test logs",
+      "share": "Share log file",
+      "clear": "Clear log file",
+      "unavailable": "File logging is off — turn it on above and restart to write a log file.",
+      "empty": "The log file is empty.",
+      "generated": "Test logs written.",
+      "cleared": "Log file cleared.",
+      "shareUnavailable": "Sharing is not available on this device.",
+      "shareError": "Could not share the logs."
+    },
+    "logConsole": {
+      "title": "Log console",
+      "empty": "No log entries captured yet.",
+      "unavailable": "The in-app log console is unavailable in this environment.",
+      "clear": "Clear console",
+      "filters": {
+        "all": "All",
+        "network": "Network",
+        "debug": "Debug+",
+        "info": "Info+",
+        "warn": "Warn+",
+        "error": "Error+"
+      },
+      "levels": {
+        "trace": "TRACE",
+        "debug": "DEBUG",
+        "info": "INFO",
+        "warn": "WARN",
+        "error": "ERROR",
+        "fatal": "FATAL"
+      }
+    },
+    "network": {
+      "title": "Network inspector",
+      "detailTitle": "Request detail",
+      "empty": "No requests captured yet.",
+      "unavailable": "The network inspector is unavailable in this environment.",
+      "notFound": "This request is no longer available.",
+      "clear": "Clear",
+      "method": "Method",
+      "url": "URL",
+      "state": "State",
+      "status": "Status",
+      "duration": "Duration",
+      "durationValue": "{{ms}} ms",
+      "error": "Error",
+      "requestHeaders": "Request headers",
+      "requestBody": "Request body",
+      "responseHeaders": "Response headers",
+      "responseBody": "Response body",
+      "noHeaders": "(none)",
+      "noBody": "(no body)",
+      "states": {
+        "pending": "Pending",
+        "success": "Success",
+        "failure": "Failure"
+      }
+    },
+    "mocking": {
+      "title": "Mock data",
+      "label": "Use mock data sources",
+      "hint": "Runs the app fully offline against in-memory data."
+    },
+    "remoteConfig": {
+      "title": "Remote config",
+      "triggerForcedUpdate": "Force an update",
+      "clearForcedUpdate": "Clear forced update",
+      "toggleKillSwitch": "Toggle kill switch",
+      "killSwitchState": "Kill switch: {{state}}",
+      "unavailable": "Enable mock data to control remote config."
+    },
+    "crashReporting": {
+      "title": "Crash reporting",
+      "enabled": "Bugsee is active for this internal build.",
+      "disabled": "Crash reporting is off (production build or no token).",
+      "logTestException": "Log a test exception"
+    }
+  }
+}

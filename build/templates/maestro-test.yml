@@ -1,0 +1,103 @@
+# Tier-3 device tests — the Maestro smoke flows (e2e/) against the signed Android
+# build produced upstream. Downloads the APK artifact, boots an emulator,
+# installs the app, and runs the smoke-tagged flows.
+#
+# ⚠ Requires an Android-emulator-capable agent (nested virtualization / KVM, or a
+# self-hosted / macOS agent). The "Enable KVM access" step below fixes /dev/kvm
+# *permissions* on the hosted image, but the agent SKU must actually expose KVM —
+# if it doesn't, move this job to a self-hosted / macOS pool. The Maestro flows
+# themselves are authored and reviewed in e2e/.
+parameters:
+  - name: artifactName # the published Android artifact to test (an .apk)
+    type: string
+
+steps:
+  - task: NodeTool@0
+    displayName: Install Node
+    inputs:
+      versionSpec: $(nodeVersion)
+  - task: JavaToolInstaller@0
+    displayName: Install JDK
+    inputs:
+      versionSpec: $(javaVersion)
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - task: DownloadBuildArtifacts@1
+    displayName: Download app artifact
+    inputs:
+      artifactName: ${{ parameters.artifactName }}
+      downloadPath: $(Pipeline.Workspace)/app
+
+  - script: |
+      curl -Ls "https://get.maestro.mobile.dev" | bash
+      echo "##vso[task.prependpath]$HOME/.maestro/bin"
+    displayName: Install Maestro
+
+  # The emulator needs hardware acceleration (KVM). On the hosted image /dev/kvm
+  # exists but the agent user isn't in the `kvm` group, so `-accel on` fails with
+  # "requires hardware acceleration". A udev rule making the node world-accessible
+  # fixes it immediately (adding the user to the group would need a re-login). This
+  # is the same workaround reactivecircus/android-emulator-runner applies.
+  - script: |
+      set -e
+      echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+        | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+      sudo udevadm control --reload-rules
+      sudo udevadm trigger --name-match=kvm
+    displayName: Enable KVM access
+
+  # Create + boot a headless emulator. sdkmanager/avdmanager/emulator/adb ship
+  # with the Android SDK on hosted images but are NOT on PATH by default — resolve
+  # their bin dirs under $ANDROID_SDK_ROOT and prepend them. Each pipeline `script`
+  # runs in a fresh shell, so this step's PATH/env don't survive on their own;
+  # persist them for the Install + maestro steps (which both need adb) via
+  # `##vso` logging commands. The emulator itself needs KVM (nested virt).
+  - script: |
+      set -e
+      export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}
+      export ANDROID_HOME=$ANDROID_SDK_ROOT
+      CMDLINE_BIN=$(ls -d "$ANDROID_SDK_ROOT"/cmdline-tools/*/bin | head -1)
+      export PATH="$CMDLINE_BIN:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+      # Persist for subsequent steps (adb lives in platform-tools).
+      echo "##vso[task.setvariable variable=ANDROID_SDK_ROOT]$ANDROID_SDK_ROOT"
+      echo "##vso[task.setvariable variable=ANDROID_HOME]$ANDROID_HOME"
+      echo "##vso[task.prependpath]$ANDROID_SDK_ROOT/platform-tools"
+      yes | sdkmanager "platform-tools" "emulator" "system-images;android-34;google_apis;x86_64" >/dev/null
+      echo no | avdmanager create avd -n ci -k "system-images;android-34;google_apis;x86_64" --force
+      nohup $ANDROID_SDK_ROOT/emulator/emulator -avd ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -accel on &
+      # Bounded wait — the emulator runs detached, so a boot failure (e.g. no KVM)
+      # would otherwise hang `wait-for-device` until the job timeout. Fail fast.
+      timeout 300 adb wait-for-device \
+        || { echo "emulator failed to come online"; adb devices; exit 1; }
+      # Block until the system finishes booting.
+      until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
+      adb shell input keyevent 82
+    displayName: Boot Android emulator
+
+  - script: |
+      set -e
+      APK=$(find "$(Pipeline.Workspace)/app" -name '*.apk' | head -1)
+      echo "Installing $APK"
+      adb install -r "$APK"
+    displayName: Install app on emulator
+
+  - script: >
+      maestro test --include-tags smoke
+      --format junit --output "$(Build.ArtifactStagingDirectory)/maestro-report.xml"
+      e2e/
+    displayName: maestro test (smoke)
+
+  - task: PublishTestResults@2
+    displayName: Publish Maestro results
+    condition: always()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: $(Build.ArtifactStagingDirectory)/maestro-report.xml
+      testRunTitle: Maestro smoke
+  - task: PublishBuildArtifacts@1
+    displayName: Publish Maestro debug output
+    condition: always()
+    inputs:
+      pathToPublish: $(Build.ArtifactStagingDirectory)
+      artifactName: Maestro_Output

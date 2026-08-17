@@ -1,0 +1,11 @@
+# Maestro workspace configuration for the Tier-3 smoke suite.
+#
+# Run the whole suite from the repo root with:
+#   maestro test e2e/
+# Run only the smoke-tagged flows (what CI's device stage runs):
+#   maestro test --include-tags smoke e2e/
+#
+# See e2e/README.md for prerequisites (a booted emulator/simulator with a debug
+# build installed) and doc/Testing.md (Tier 3) for how this fits the strategy.
+flows:
+  - 'flows/*.yaml'

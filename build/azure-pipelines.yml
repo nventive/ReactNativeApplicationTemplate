@@ -1,0 +1,376 @@
+# Full delivery pipeline — verify loop as the PR gate, then signed staging
+# & production builds, internal distribution (Firebase App Distribution +
+# TestFlight), store publishing (Google Play + App Store), Maestro device tests,
+# MobSF binary security scans over the signed artifacts, and a nightly dependency
+# security scan. Native builds run from `expo prebuild` + Gradle/Xcode on our own
+# agents — EAS Build is deliberately not used.
+#
+# There are **no debug builds** — the single signed **staging (Release)** build is
+# what validates every PR, and the release/deploy stages downstream are gated by
+# IsPullRequestBuild / IsReleaseBranch. Stages use PascalCase_With_Underscores and
+# jobs use On<OS>_<Purpose> naming.
+#
+# ⚠ Signing, native build config, and store/distribution credentials must be set
+# up before this pipeline can run. The signed-build, device-test and deployment
+# stages need one-time Azure DevOps setup (variable groups, secure files, service
+# connections, environments) — see doc/AzurePipelines.md ("One-time Azure DevOps
+# setup"). The four deployment stages ship **commented out**; enable them per the
+# doc once the Library items exist.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+      - release/*
+      - feature/*
+
+schedules:
+  - cron: '0 6 * * *' # 06:00 UTC, nightly
+    displayName: Nightly security scan
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  - template: variables.yml
+
+stages:
+  # 1) Commit validation — enforce Conventional Commits on PR builds so Azure
+  #    Repos PRs get the same gate as the GitHub `conventional-commits` action
+  #    (.github/workflows/conventional-commits.yml). Runs on every non-scheduled
+  #    build; the validation step inside is PR-only (a no-op — and a trivial
+  #    success — on CI/main builds), which keeps this stage a valid dependency for
+  #    Build_Staging on non-PR builds while still skipping on the nightly schedule.
+  - stage: Commit_Validation
+    displayName: Commit validation
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    jobs:
+      - job: OnLinux_ValidateCommits
+        displayName: Validate commit messages
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/validate-commits.yml
+
+  # 2) Verify loop (typecheck/lint/test + coverage). Fast, Linux-only, no
+  #    secrets. The signed staging build below is what proves the app compiles;
+  #    this stage proves the JS is sound. Together they gate every PR. Publishes
+  #    JUnit test results + Cobertura coverage (diagnostic, never a gate).
+  - stage: Verify
+    displayName: Verify (typecheck, lint, test)
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    jobs:
+      - job: OnLinux_Verify
+        displayName: Typecheck, lint & test
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/verify.yml
+
+  # 3) Signed staging build. There is
+  #    NO separate debug build: this Release-config, signed build runs on **every**
+  #    PR and commit and is the real build gate. Deploy/production stages below are
+  #    what get skipped on PRs, not this one.
+  - stage: Build_Staging
+    displayName: Build staging (signed)
+    dependsOn:
+      - Commit_Validation
+      - Verify
+    variables:
+      - group: ReactNativeApplicationTemplate.Distribution.Internal.Android
+      - group: ReactNativeApplicationTemplate.Distribution.Internal.iOS
+      - group: ReactNativeApplicationTemplate.Bugsee.Tokens
+    jobs:
+      - job: OnLinux_Android
+        displayName: Signed Android (staging apk)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/build-android.yml
+            parameters:
+              environment: staging
+              artifactFormat: apk
+              artifactName: Android_Staging
+              # Trim the ABIs the native build compiles, to speed it up. The staging
+              # APK is internal-only (Firebase App Distribution / sideload). Off-PR it
+              # is ALSO installed on an x86_64 emulator by the DeviceTests_Staging
+              # (Maestro) stage, so it must carry x86_64 as well as arm64-v8a (real
+              # devices). On a PR that stage — and the MobSF scan — are skipped (the
+              # IsPullRequestBuild gate), so the APK is only the compile gate and is
+              # never installed: arm64-v8a alone suffices and drops the most work.
+              # Production keeps all ABIs (its aab omits this parameter).
+              ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+                reactNativeArchitectures: 'arm64-v8a'
+              ${{ else }}:
+                reactNativeArchitectures: 'arm64-v8a,x86_64'
+              keystoreSecureFile: com.nventive.internal.reactnativeapptemplate.jks
+              # Firebase is OFF until the config secure file is uploaded to the
+              # Library. To enable: upload it, then uncomment the line below
+              # (its presence alone turns Firebase on). See doc/AzurePipelines.md.
+              # firebaseAndroidSecureFile: google-services-reactnative-internal.json
+              bugseeEnabled: true
+      - job: OnMac_iOS
+        displayName: Signed iOS (staging ipa)
+        pool:
+          vmImage: $(macOSHostedAgentImage)
+        steps:
+          - template: templates/build-ios.yml
+            parameters:
+              environment: staging
+              artifactName: iOS_Staging
+              certificateSecureFile: nventive.p12
+              provisioningProfileSecureFile: com.nventive.internal.reactnativeapptemplate.mobileprovision
+              exportOptionsSecureFile: com.nventive.internal.reactnativeapptemplate.exportOptions.plist
+              # Firebase is OFF until the config secure file is uploaded to the
+              # Library. To enable: upload it, then uncomment the line below
+              # (its presence alone turns Firebase on). See doc/AzurePipelines.md.
+              # firebaseIosSecureFile: GoogleService-Info-reactnative-internal.plist
+              bugseeEnabled: true
+
+  # template-only:begin — The Template_Validation stage below exists ONLY in the
+  # template repository: it validates the project generator (cli/), which a
+  # generated app does not carry. `yarn generate` strips everything between these
+  # two markers from this file (cli/generate.ts -> stripTemplateOnlyBlocks) and
+  # deletes the steps template it references, so a generated app's pipeline never
+  # includes it. Keep the whole stage inside the markers, and keep nothing else
+  # depending on it. See doc/AzurePipelines.md "Template-validation stage".
+  - stage: Template_Validation
+    displayName: Validate project generator (Android)
+    dependsOn: Verify
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    jobs:
+      - job: OnLinux_GenerateAndroid
+        displayName: Generate app, verify & Android Release compile
+        # Cold Gradle + NDK/build-tools download on a fresh agent is slow; give
+        # the native compile room beyond the 60-min hosted default.
+        timeoutInMinutes: 90
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        variables:
+          - name: generatedAppDir
+            value: $(Agent.TempDirectory)/GeneratedApp
+        steps:
+          - template: templates/template-validation.yml
+  # template-only:end
+
+  # 4) Device tests — Maestro smoke against the staging Android build. Skipped on
+  #    PRs to keep them fast (the verify loop + staging build are the PR gate).
+  - stage: DeviceTests_Staging
+    displayName: Device tests (Maestro)
+    dependsOn: Build_Staging
+    condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'))
+    jobs:
+      - job: OnLinux_Maestro
+        displayName: Maestro smoke (Android)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/maestro-test.yml
+            parameters:
+              artifactName: Android_Staging
+
+  # 5) Internal distribution (staging) — Android to Firebase App Distribution,
+  #    iOS to TestFlight.
+  #
+  #    DISABLED by default: needs the Firebase service-account secure file, an App
+  #    Store Connect service connection, the deployment variables in the
+  #    Internal.* groups, the "Apple App Store" Azure extension, and the
+  #    "Firebase App Distribution" / "TestFlight" Pipelines > Environments.
+  #    To enable: complete doc/AzurePipelines.md § "Enabling deployment", then
+  #    uncomment this whole stage.
+  #
+  # - stage: FirebaseDistribution_TestFlight_Staging
+  #   displayName: Distribute staging (Firebase App Distribution + TestFlight)
+  #   dependsOn: Build_Staging
+  #   condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'))
+  #   jobs:
+  #     - template: templates/deploy-firebase-app-distribution.yml
+  #       parameters:
+  #         applicationEnvironment: staging
+  #         deploymentEnvironment: Firebase App Distribution
+  #         androidVariableGroup: ReactNativeApplicationTemplate.Distribution.Internal.Android
+  #         artifactName: Android_Staging
+  #         artifactFileName: '*.apk'
+  #         firebaseServiceAccountSecureFile: firebase-app-distribution-service-account.json
+  #     - template: templates/deploy-testflight.yml
+  #       parameters:
+  #         applicationEnvironment: staging
+  #         deploymentEnvironment: TestFlight
+  #         iosVariableGroup: ReactNativeApplicationTemplate.Distribution.Internal.iOS
+  #         artifactName: iOS_Staging
+
+  # 6) Signed production builds (release branch only).
+  - stage: Build_Production
+    displayName: Build production (signed)
+    dependsOn: Build_Staging
+    condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'), eq(variables.IsReleaseBranch, 'true'))
+    variables:
+      - group: ReactNativeApplicationTemplate.Distribution.GooglePlay
+      - group: ReactNativeApplicationTemplate.Distribution.AppStore
+    jobs:
+      - job: OnLinux_Android
+        displayName: Signed Android (production aab)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/build-android.yml
+            parameters:
+              environment: production
+              # 'aab' feeds Google Play. To also distribute the production build via
+              # Firebase App Distribution (which needs an .apk), change this to 'both'
+              # and enable the FirebaseDistribution_Production stage below.
+              artifactFormat: aab
+              artifactName: Android_Production
+              keystoreSecureFile: com.nventive.reactnativeapptemplate.jks
+              # Firebase is OFF until the config secure file is uploaded to the
+              # Library. To enable: upload it, then uncomment the line below
+              # (its presence alone turns Firebase on). See doc/AzurePipelines.md.
+              # firebaseAndroidSecureFile: google-services-reactnative.json
+              bugseeEnabled: false
+      - job: OnMac_iOS
+        displayName: Signed iOS (production ipa)
+        pool:
+          vmImage: $(macOSHostedAgentImage)
+        steps:
+          - template: templates/build-ios.yml
+            parameters:
+              environment: production
+              artifactName: iOS_Production
+              certificateSecureFile: nventive.p12
+              provisioningProfileSecureFile: com.nventive.reactnativeapptemplate.mobileprovision
+              exportOptionsSecureFile: com.nventive.reactnativeapptemplate.exportOptions.plist
+              # Firebase is OFF until the config secure file is uploaded to the
+              # Library. To enable: upload it, then uncomment the line below
+              # (its presence alone turns Firebase on). See doc/AzurePipelines.md.
+              # firebaseIosSecureFile: GoogleService-Info-reactnative.plist
+              bugseeEnabled: false
+
+  # 7) Store publishing (production, release branch only). Both go to their
+  #    internal/TestFlight tracks — promotion to public release stays manual.
+  #
+  #    DISABLED by default: same setup as stage 4 plus the "Google Play" Azure
+  #    extension, a Google Play service connection, and the "GooglePlay" / "AppStore"
+  #    Pipelines > Environments. See doc/AzurePipelines.md § "Enabling deployment".
+  #
+  # - stage: GooglePlay
+  #   displayName: Publish to Google Play (internal track)
+  #   dependsOn: Build_Production
+  #   condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'), eq(variables.IsReleaseBranch, 'true'))
+  #   jobs:
+  #     - template: templates/deploy-googleplay.yml
+  #       parameters:
+  #         applicationEnvironment: production
+  #         deploymentEnvironment: GooglePlay
+  #         androidVariableGroup: ReactNativeApplicationTemplate.Distribution.GooglePlay
+  #         artifactName: Android_Production
+  #         track: internal
+  #
+  # - stage: AppStore
+  #   displayName: Publish to App Store Connect (TestFlight)
+  #   dependsOn: Build_Production
+  #   condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'), eq(variables.IsReleaseBranch, 'true'))
+  #   jobs:
+  #     - template: templates/deploy-testflight.yml
+  #       parameters:
+  #         applicationEnvironment: production
+  #         deploymentEnvironment: AppStore
+  #         iosVariableGroup: ReactNativeApplicationTemplate.Distribution.AppStore
+  #         artifactName: iOS_Production
+
+  # 8) Firebase App Distribution for the PRODUCTION build (optional). Needs the
+  #    production Android build to also emit an .apk: set Build_Production's
+  #    artifactFormat to 'both' before enabling.
+  #
+  # - stage: FirebaseDistribution_Production
+  #   displayName: Distribute production (Firebase App Distribution)
+  #   dependsOn: Build_Production
+  #   condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'), eq(variables.IsReleaseBranch, 'true'))
+  #   jobs:
+  #     - template: templates/deploy-firebase-app-distribution.yml
+  #       parameters:
+  #         applicationEnvironment: production
+  #         deploymentEnvironment: Firebase App Distribution
+  #         androidVariableGroup: ReactNativeApplicationTemplate.Distribution.GooglePlay
+  #         artifactName: Android_Production
+  #         artifactFileName: '*.apk'
+  #         firebaseServiceAccountSecureFile: firebase-app-distribution-service-account.json
+
+  # 9) Binary SAST — MobSF static analysis over the signed build artifacts.
+  #    Non-blocking: publishes PDF + JSON reports as <artifact>_Security_Reports
+  #    for triage, never gates the build. Complements the nightly dependency (SCA)
+  #    audit below — this scans the app *binary*, that scans the *dependency tree*.
+  #    Runs off-PR to keep PRs fast (like the device-test stage); to also scan on
+  #    PRs, drop the IsPullRequestBuild condition on the staging stage below (it
+  #    adds a dockerized MobSF run to every PR).
+  - stage: Security_Scan_Staging
+    displayName: Security scan — staging (MobSF)
+    dependsOn: Build_Staging
+    condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'))
+    jobs:
+      - job: OnLinux_Android_SecurityScan
+        displayName: MobSF (Android apk)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/mobsf-scan.yml
+            parameters:
+              artifactName: Android_Staging
+              platform: Android
+              fileExtension: apk
+      - job: OnLinux_iOS_SecurityScan
+        displayName: MobSF (iOS ipa)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/mobsf-scan.yml
+            parameters:
+              artifactName: iOS_Staging
+              platform: iOS
+              fileExtension: ipa
+
+  # 10) Binary SAST for the production artifacts (release branch only), same
+  #    non-blocking MobSF scan over the .aab + .ipa.
+  - stage: Security_Scan_Production
+    displayName: Security scan — production (MobSF)
+    dependsOn: Build_Production
+    condition: and(succeeded(), eq(variables.IsPullRequestBuild, 'false'), eq(variables.IsReleaseBranch, 'true'))
+    jobs:
+      - job: OnLinux_Android_SecurityScan
+        displayName: MobSF (Android aab)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/mobsf-scan.yml
+            parameters:
+              artifactName: Android_Production
+              platform: Android
+              fileExtension: aab
+      - job: OnLinux_iOS_SecurityScan
+        displayName: MobSF (iOS ipa)
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/mobsf-scan.yml
+            parameters:
+              artifactName: iOS_Production
+              platform: iOS
+              fileExtension: ipa
+
+  # 11) Nightly dependency security scan (non-blocking; not a PR gate).
+  - stage: Security_Scan
+    displayName: Security scan (nightly)
+    dependsOn: []
+    condition: eq(variables['Build.Reason'], 'Schedule')
+    jobs:
+      - job: OnLinux_Security
+        displayName: Dependency audit
+        pool:
+          vmImage: $(ubuntuHostedAgentImage)
+        steps:
+          - template: templates/security-audit.yml

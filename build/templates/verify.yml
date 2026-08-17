@@ -1,0 +1,45 @@
+# Verify-loop steps (install → typecheck → lint → test). The same commands run
+# locally as `yarn typecheck && yarn lint && yarn test`. Reused by the PR gate.
+#
+# The test step additionally emits machine-readable reports so CI can surface
+# them (both test results and coverage, on every build):
+#   - JUnit test results     → junit.xml               (jest-junit reporter)
+#   - Cobertura coverage      → coverage/cobertura-coverage.xml (jest --coverage)
+# Both are published as build artifacts / tabs below. Coverage stays a
+# diagnostic, never a gate (no threshold blocks the build — see doc/Testing.md).
+steps:
+  - task: NodeTool@0
+    displayName: Install Node
+    inputs:
+      versionSpec: $(nodeVersion)
+  - script: yarn install --frozen-lockfile
+    displayName: yarn install
+  - script: yarn typecheck
+    displayName: yarn typecheck
+  - script: yarn lint
+    displayName: yarn lint
+  - script: >
+      yarn test --ci
+      --coverage
+      --coverageReporters=cobertura
+      --coverageReporters=text-summary
+      --reporters=default
+      --reporters=jest-junit
+    displayName: yarn test (coverage + JUnit)
+    env:
+      # jest-junit writes to ./junit.xml by default; pin it explicitly so the
+      # publish task below has a stable path.
+      JEST_JUNIT_OUTPUT_NAME: junit.xml
+
+  - task: PublishTestResults@2
+    displayName: Publish test results
+    condition: succeededOrFailed() # still surface results when tests fail
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: junit.xml
+      testRunTitle: Unit tests (Jest)
+  - task: PublishCodeCoverageResults@2
+    displayName: Publish code coverage
+    condition: succeededOrFailed()
+    inputs:
+      summaryFileLocation: coverage/cobertura-coverage.xml

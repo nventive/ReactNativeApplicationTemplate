@@ -1,0 +1,99 @@
+# Binary SAST — MobSF (Mobile Security Framework) static analysis over a signed
+# build artifact (.apk / .aab / .ipa). Runs a dockerized MobSF server on the
+# agent, uploads the artifact, scans it, and publishes the PDF + JSON reports as
+# `<artifactName>_Security_Reports`.
+#
+# Non-blocking by design (like the dependency audit): it produces reports for
+# triage and does NOT fail the build on findings. To turn it into a gate, parse
+# `report.json` (e.g. `.appsec.high` / severity counts) after the scan and exit
+# non-zero past a threshold.
+#
+# Runs on Linux regardless of the app platform — MobSF ships as a Linux
+# container, and it statically analyses an .ipa on Linux just as well as an .aab.
+parameters:
+  - name: artifactName # the published build artifact to scan (e.g. Android_Staging)
+    type: string
+  - name: platform # label for the report subfolder: Android | iOS
+    type: string
+  - name: fileExtension # the artifact's file type / MobSF scan type: apk | aab | ipa
+    type: string
+
+steps:
+  - task: DownloadBuildArtifacts@1
+    displayName: Download build artifact
+    inputs:
+      artifactName: ${{ parameters.artifactName }}
+      downloadPath: $(Pipeline.Workspace)/mobsf
+
+  - task: DockerInstaller@0
+    displayName: Install Docker
+    inputs:
+      dockerVersion: $(dockerVersion)
+
+  - script: docker pull opensecurity/mobile-security-framework-mobsf:$(mobsfImageTag)
+    displayName: Pull MobSF image
+
+  # DATA_UPLOAD_MAX_MEMORY_SIZE is raised so MobSF accepts large signed binaries.
+  - script: >
+      docker run -d --rm --name mobsf
+      -e MOBSF_API_KEY="$(mobSfApiKey)"
+      -e DATA_UPLOAD_MAX_MEMORY_SIZE=209715200
+      -p 8000:8000
+      opensecurity/mobile-security-framework-mobsf:$(mobsfImageTag)
+    displayName: Start MobSF server
+
+  - script: |
+      set -euo pipefail
+      BASE="http://127.0.0.1:8000/api/v1"
+
+      # Wait for the MobSF REST API (container boot + Django start) before using it.
+      up=false
+      for i in $(seq 1 30); do
+        if curl -sf -H "Authorization: $MOBSF_API_KEY" "$BASE/scans" -o /dev/null; then
+          up=true; echo "MobSF is up (attempt $i)"; break
+        fi
+        echo "Waiting for MobSF... ($i/30)"; sleep 5
+      done
+      if [ "$up" != true ]; then echo "MobSF did not start in time"; exit 1; fi
+
+      # Locate the single build artifact of the expected type (-print -quit stops
+      # at the first hit, so there is no head/SIGPIPE interaction with pipefail).
+      FILE=$(find "$(Pipeline.Workspace)/mobsf" -type f -name "*.${EXT}" -print -quit)
+      if [ -z "$FILE" ]; then echo "No .${EXT} artifact found under the download path"; exit 1; fi
+      echo "Scanning: $FILE"
+
+      # Upload → scan → download PDF + JSON reports. scan_type/file_name are echoed
+      # back from the upload so MobSF's own detection drives the scan (apk vs aab).
+      UPLOAD=$(curl -sf -H "Authorization: $MOBSF_API_KEY" -F "file=@${FILE};type=application/octet-stream" "$BASE/upload")
+      HASH=$(echo "$UPLOAD" | jq -r '.hash')
+      SCAN_TYPE=$(echo "$UPLOAD" | jq -r '.scan_type')
+      FILE_NAME=$(echo "$UPLOAD" | jq -r '.file_name')
+      if [ -z "$HASH" ] || [ "$HASH" = "null" ]; then echo "Upload failed: $UPLOAD"; exit 1; fi
+      echo "Uploaded (hash=$HASH, type=$SCAN_TYPE)"
+
+      curl -sf --max-time 1200 -H "Authorization: $MOBSF_API_KEY" \
+        -F "hash=$HASH" -F "scan_type=$SCAN_TYPE" -F "file_name=$FILE_NAME" \
+        "$BASE/scan" -o /dev/null
+      echo "Scan complete"
+
+      REPORT_DIR="$(Build.ArtifactStagingDirectory)/${PLATFORM}"
+      mkdir -p "$REPORT_DIR"
+      curl -sf -H "Authorization: $MOBSF_API_KEY" -F "hash=$HASH" "$BASE/download_pdf" -o "$REPORT_DIR/report.pdf"
+      curl -sf -H "Authorization: $MOBSF_API_KEY" -F "hash=$HASH" "$BASE/report_json" | jq '.' > "$REPORT_DIR/report.json"
+      echo "Reports written to $REPORT_DIR"
+    displayName: Scan with MobSF
+    env:
+      MOBSF_API_KEY: $(mobSfApiKey)
+      EXT: ${{ parameters.fileExtension }}
+      PLATFORM: ${{ parameters.platform }}
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish MobSF reports
+    condition: always()
+    inputs:
+      pathToPublish: $(Build.ArtifactStagingDirectory)/${{ parameters.platform }}
+      artifactName: ${{ parameters.artifactName }}_Security_Reports
+
+  - script: docker rm -f mobsf || true
+    displayName: Stop MobSF server
+    condition: always()

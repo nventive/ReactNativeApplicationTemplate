@@ -1,0 +1,27 @@
+# Calculates the app's semantic version from the Git history with GitVersion,
+# so version metadata is derived from the repository rather than hand-maintained.
+# The `gitversion/execute` task exposes the result as pipeline variables for the
+# steps that follow in the same job — this template consumes `$(MajorMinorPatch)`
+# (the marketing version) and `$(PreReleaseNumber)` (the commit-based build
+# counter). The build jobs feed those into `expo prebuild` via APP_VERSION /
+# APP_BUILD_NUMBER (see build-android.yml / build-ios.yml and app.config.ts).
+#
+# ⚠ GitVersion needs the FULL git history — the build templates that include this
+# check out with `fetchDepth: 0`. A shallow clone makes the calculation fail.
+parameters:
+  - name: configFilePath
+    type: string
+    default: '$(Build.SourcesDirectory)/build/gitversion-config.yml'
+
+steps:
+  - task: gitversion/setup@3
+    retryCountOnTaskFailure: 3
+    inputs:
+      versionSpec: '5.12.0'
+    displayName: 'Install GitVersion'
+
+  - task: gitversion/execute@3
+    inputs:
+      useConfigFile: true
+      configFilePath: ${{ parameters.configFilePath }}
+    displayName: 'Calculate Version'

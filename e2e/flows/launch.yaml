@@ -1,0 +1,16 @@
+# Tier-3 smoke — the app launches and renders the Dad Jokes list through every
+# layer (screen -> hook -> business service -> repository). This is the "does it
+# boot and paint the first screen" check a device catches that headless tests
+# cannot.
+#
+# `appId` tracks app.config.ts (ios.bundleIdentifier / android.package). The
+# project generator rewrites it when the template is renamed.
+appId: com.nventive.internal.reactnativeapptemplate
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: 'DadJokesContainer'
+- assertVisible: 'Dad Jokes'

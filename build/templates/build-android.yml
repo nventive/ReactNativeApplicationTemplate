@@ -1,0 +1,158 @@
+# Signed Android build from `expo prebuild` + Gradle (no EAS Build).
+#
+# Signing is injected at the Gradle command line via `android.injected.signing.*`
+# properties, so the generated (gitignored) android/app/build.gradle needs no
+# hand-editing — the keystore comes from an Azure secure file and the passwords
+# from the lane's variable group.
+parameters:
+  - name: environment # 'staging' | 'production' → APP_ENV
+    type: string
+  - name: artifactFormat # 'apk' | 'aab' | 'both'
+    type: string
+    default: 'aab'
+  - name: artifactName
+    type: string
+  - name: keystoreSecureFile # bundle-id-named .jks secure file (see doc/AzurePipelines.md)
+    type: string
+  # Firebase Android config secure file. **Empty (the default) = Firebase OFF**:
+  # no download, no FIREBASE_ENABLED, clean prebuild. Supplying the name is the
+  # single switch that turns Firebase on for this build.
+  - name: firebaseAndroidSecureFile
+    type: string
+    default: ''
+  - name: bugseeEnabled # pass the internal Bugsee token (staging only)
+    type: boolean
+    default: false
+  # CI build-speed tuning (see the "Tune Gradle build" step below).
+  # Which ABIs to compile native code for. Empty = Expo's default (all four:
+  # armeabi-v7a,arm64-v8a,x86,x86_64). Pass a trimmed list on lanes that don't
+  # ship to the store (e.g. staging → arm64-v8a,x86_64) to cut the per-ABI
+  # New-Architecture C++/Hermes compile. Leave empty for the production .aab.
+  - name: reactNativeArchitectures
+    type: string
+    default: ''
+  # Gradle daemon JVM args. Overrides Expo's default (~2 GB heap). Kept modest so
+  # the out-of-heap native toolchain + Node bundle step keep room on a ~7 GB agent.
+  - name: gradleJvmArgs
+    type: string
+    default: '-Xmx3072m -XX:MaxMetaspaceSize=1024m'
+
+steps:
+  # Full history so GitVersion can calculate the version (a shallow clone fails).
+  - checkout: self
+    fetchDepth: 0
+
+  # Derive the app version from the Git history: $(MajorMinorPatch) + $(BuildNumber).
+  - template: gitversion.yml
+  - template: build-number.yml
+
+  - task: NodeTool@0
+    displayName: Install Node
+    inputs:
+      versionSpec: $(nodeVersion)
+  - task: JavaToolInstaller@0
+    displayName: Install JDK
+    inputs:
+      versionSpec: $(javaVersion)
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+  - script: yarn install --frozen-lockfile
+    displayName: yarn install
+
+  # Per-lane Firebase config (skipped when the secure-file name is empty).
+  - template: firebase-config.yml
+    parameters:
+      androidSecureFile: ${{ parameters.firebaseAndroidSecureFile }}
+
+  - task: DownloadSecureFile@1
+    name: androidKeystore
+    displayName: Download signing keystore
+    inputs:
+      secureFile: ${{ parameters.keystoreSecureFile }}
+
+  # Generate android/ fresh from app.config.ts. APP_ENV picks the build-default
+  # environment. APP_VERSION / APP_BUILD_NUMBER (from GitVersion above) become the
+  # Android versionName / versionCode. FIREBASE_ENABLED + the google-services path
+  # are set ONLY when a Firebase secure file was provided, so a build without one
+  # prebuilds clean (no Firebase native footprint). The Bugsee token (if any)
+  # flows into extra.bugsee.
+  - script: npx expo prebuild --platform android --no-install
+    displayName: expo prebuild (android)
+    env:
+      APP_ENV: ${{ parameters.environment }}
+      APP_VERSION: $(MajorMinorPatch)
+      APP_BUILD_NUMBER: $(BuildNumber)
+      ${{ if ne(parameters.firebaseAndroidSecureFile, '') }}:
+        FIREBASE_ENABLED: 'true'
+        ANDROID_GOOGLE_SERVICES_FILE: '$(Build.SourcesDirectory)/google-services.json'
+      ${{ if parameters.bugseeEnabled }}:
+        BUGSEE_ANDROID_TOKEN: $(BugseeAndroidToken)
+
+  # CI build-speed tuning. Runs AFTER prebuild, which regenerates
+  # android/gradle.properties from Expo's template on every build (the dir is
+  # gitignored, so this can't be a committed edit). A key repeated later in a
+  # .properties file wins (Java Properties = last assignment), so appending here
+  # overrides the template's values:
+  #   • org.gradle.jvmargs — raise the daemon heap above Expo's ~2 GB default.
+  #     Don't set it so high the OOM killer takes the OUT-of-heap native toolchain
+  #     (clang/CMake/ninja) or the Node/Metro release-bundle step (~7 GB agent).
+  #   • reactNativeArchitectures — when a trimmed list is passed (non-store lanes),
+  #     compile native code for just those ABIs instead of all four, ~halving the
+  #     New-Architecture C++/Hermes compile. Empty keeps every ABI (production .aab).
+  - script: |
+      set -euo pipefail
+      GRADLE_PROPS=android/gradle.properties
+      # Expo serializes gradle.properties with NO trailing newline, so open our
+      # additions with a leading newline — otherwise the first appended key merges
+      # onto Expo's last property (e.g. expo.inlineModules.watchedDirectories=[])
+      # and corrupts it (the autolinking node step then fails parsing it).
+      printf '\n# --- CI build tuning (appended by build-android.yml) ---\n' >> "$GRADLE_PROPS"
+      jvmargs='${{ parameters.gradleJvmArgs }}'
+      if [ -n "$jvmargs" ]; then
+        echo "org.gradle.jvmargs=$jvmargs" >> "$GRADLE_PROPS"
+      fi
+      archs='${{ parameters.reactNativeArchitectures }}'
+      if [ -n "$archs" ]; then
+        echo "reactNativeArchitectures=$archs" >> "$GRADLE_PROPS"
+      fi
+    displayName: Tune Gradle build (heap + target ABIs)
+
+  # Signed release build. bundle → .aab (Play), assemble → .apk (Firebase App
+  # Distribution / sideload). 'both' emits each (e.g. a production build that
+  # publishes the .aab to Play and distributes the .apk via Firebase).
+  - ${{ if or(eq(parameters.artifactFormat, 'aab'), eq(parameters.artifactFormat, 'both')) }}:
+      - script: >
+          ./gradlew :app:bundleRelease
+          -Pandroid.injected.signing.store.file="$(androidKeystore.secureFilePath)"
+          -Pandroid.injected.signing.store.password="$(AndroidSigningStorePassword)"
+          -Pandroid.injected.signing.key.alias="$(AndroidSigningKeyAlias)"
+          -Pandroid.injected.signing.key.password="$(AndroidSigningKeyPassword)"
+        displayName: gradlew bundleRelease (signed)
+        workingDirectory: android
+      - task: CopyFiles@2
+        displayName: Stage .aab
+        inputs:
+          sourceFolder: android/app/build/outputs/bundle/release
+          contents: '*.aab'
+          targetFolder: $(Build.ArtifactStagingDirectory)
+  - ${{ if or(eq(parameters.artifactFormat, 'apk'), eq(parameters.artifactFormat, 'both')) }}:
+      - script: >
+          ./gradlew :app:assembleRelease
+          -Pandroid.injected.signing.store.file="$(androidKeystore.secureFilePath)"
+          -Pandroid.injected.signing.store.password="$(AndroidSigningStorePassword)"
+          -Pandroid.injected.signing.key.alias="$(AndroidSigningKeyAlias)"
+          -Pandroid.injected.signing.key.password="$(AndroidSigningKeyPassword)"
+        displayName: gradlew assembleRelease (signed)
+        workingDirectory: android
+      - task: CopyFiles@2
+        displayName: Stage .apk
+        inputs:
+          sourceFolder: android/app/build/outputs/apk/release
+          contents: '*.apk'
+          targetFolder: $(Build.ArtifactStagingDirectory)
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish ${{ parameters.artifactName }}
+    inputs:
+      pathToPublish: $(Build.ArtifactStagingDirectory)
+      artifactName: ${{ parameters.artifactName }}

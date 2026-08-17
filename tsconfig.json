@@ -1,0 +1,9 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "types": ["jest"]
+  },
+  "include": ["src", "test", "app.config.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,18 @@
+# Forms the native build number (Android `versionCode` / iOS `CFBundleVersion`)
+# from GitVersion's `PreReleaseNumber` plus an optional one-time `BuildPadding`.
+# Padding lets you lift the number above one a store already holds, so uploads
+# keep climbing after a version-stream change (e.g. a first release, a branch
+# whose counter starts below the last published build). `BuildPadding` defaults
+# to 0 in variables.yml. Exposes `$(BuildNumber)` to the steps that follow.
+#
+# Runs after gitversion.yml (which sets `$(PreReleaseNumber)`) in the same job.
+steps:
+  - bash: |
+      set -euo pipefail
+      buildNumber=$(( ${PRERELEASE_NUMBER:-0} + ${BUILD_PADDING:-0} ))
+      echo "##vso[task.setvariable variable=BuildNumber]$buildNumber"
+      echo "Build number: $buildNumber (PreReleaseNumber=${PRERELEASE_NUMBER:-0} + BuildPadding=${BUILD_PADDING:-0})"
+    displayName: Compute build number
+    env:
+      PRERELEASE_NUMBER: $(PreReleaseNumber)
+      BUILD_PADDING: $(BuildPadding)

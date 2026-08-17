@@ -1,0 +1,54 @@
+# Upload a signed iOS build to App Store Connect (TestFlight). Used for both the
+# internal (staging) and production lanes — both land on TestFlight; promotion to
+# a public App Store release stays a manual step in App Store Connect.
+#
+# Uses the AppStoreRelease@1 task (the "Apple App Store" Azure DevOps extension),
+# authenticated by an App Store Connect service connection named in
+# $(AppStoreServiceConnection). All other values come from the lane's iOS variable
+# group.
+#
+# ⚠ Store credentials must be configured before this stage can run. Needs the
+# extension, the service connection, the deployment variables in the iOS group,
+# and the Pipelines > Environment — see doc/AzurePipelines.md § "Enabling deployment".
+parameters:
+  - name: applicationEnvironment # 'staging' | 'production'
+    type: string
+  - name: deploymentEnvironment # Azure DevOps Environment name, e.g. 'TestFlight' | 'AppStore'
+    type: string
+  - name: iosVariableGroup # supplies the App Store Connect variables below
+    type: string
+  - name: artifactName # published iOS artifact holding the .ipa (e.g. iOS_Staging)
+    type: string
+  - name: releaseTrack # 'TestFlight' | 'Production'
+    type: string
+    default: 'TestFlight'
+
+jobs:
+  - deployment: Deploy_iOS_${{ parameters.deploymentEnvironment }}
+    displayName: Publish iOS to ${{ parameters.deploymentEnvironment }}
+    pool:
+      vmImage: $(macOSHostedAgentImage)
+    environment: ${{ parameters.deploymentEnvironment }}
+    variables:
+      - group: ${{ parameters.iosVariableGroup }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - download: current
+              artifact: ${{ parameters.artifactName }}
+
+            - task: AppStoreRelease@1
+              displayName: Upload to App Store Connect (${{ parameters.releaseTrack }})
+              inputs:
+                serviceEndpoint: $(AppStoreServiceConnection)
+                appIdentifier: $(ApplicationIdentifier)
+                appType: 'iOS'
+                ipaPath: '$(Pipeline.Workspace)/${{ parameters.artifactName }}/*.ipa'
+                releaseTrack: ${{ parameters.releaseTrack }}
+                shouldSkipWaitingForProcessing: true
+                teamId: $(AppleTeamId)
+                teamName: $(AppleTeamName)
+                # App-specific password + Store Connect id bypass 2FA for CI.
+                appSpecificPassword: $(AppleAppSpecificPassword)
+                appSpecificId: $(AppleStoreConnectIdentifier)
