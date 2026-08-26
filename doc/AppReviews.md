@@ -43,7 +43,7 @@ The call never throws — a review prompt must not break the flow that triggered
 
 From Presentation, read the thin
 [`useAppReview`](../src/presentation/appReview/useAppReview.ts) hook and call it at
-a genuinely positive moment. The template wires it to the **feedback form's
+a genuinely positive moment. The app wires it to the **feedback form's
 successful submit** (a completed flow) — see [Forms.md](Forms.md):
 
 ```ts

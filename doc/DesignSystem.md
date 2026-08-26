@@ -1,6 +1,6 @@
 # Design system & theming
 
-The template's visual language: design tokens (colors, spacing, radii,
+The app's visual language: design tokens (colors, spacing, radii,
 typography), light/dark support, and a small set of themed base components every
 screen builds from.
 

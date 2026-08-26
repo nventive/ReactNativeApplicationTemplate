@@ -80,10 +80,12 @@ Maestro `appId`s, the CI signing conventions, and the Firebase example configs).
   generator itself (`cli/`, plus its `doc/` page). The generator also strips its
   own wiring — the `generate` script, the cli typecheck step, and the cli Jest
   root — so the project's quality gates keep working once `cli/` is gone.
-- **Scrubbed in place**: the `Template_Validation` stage in
-  `build/azure-pipelines.yml` and its section in `doc/AzurePipelines.md` (both
-  bracketed by `template-only` markers) are removed from those files, leaving the
-  rest of the pipeline and doc intact.
+- **Scrubbed in place** (regions bracketed by `template-only` markers, so the rest
+  of each file survives): the `Template_Validation` stage in
+  `build/azure-pipelines.yml` and its section in `doc/AzurePipelines.md`; the
+  "this repository is a template" framing in `CLAUDE.md`; and the doc index's link
+  to this page in `doc/README.md`. Prose that describes the app rather than the
+  template is reworded at the source, so it needs no marker.
 - **Formatting**: files it edited are re-run through Prettier, because shortening
   or lengthening an identifier can change how a line wraps.
 
@@ -111,8 +113,10 @@ pure functions in `cli/generate.ts`:
   `applyReplacements` performs the substitution — longest identifier first, so a
   shorter one can never partially match a longer one.
 - `stripTemplateOnlyBlocks` removes each `template-only:begin`…`template-only:end`
-  region from the pipeline and its doc (the `Template_Validation` stage), so
-  files that must survive generation keep everything *except* the marked block.
+  region from the files that must survive generation (the `Template_Validation`
+  stage in the pipeline and its doc, the template framing in `CLAUDE.md`, and the
+  generator link in the doc index), so each keeps everything *except* the marked
+  block. `stripTemplateOnlyBlocksInFiles` applies it to that file list.
 - `generate` orchestrates substitution, README rewrite, cleanup, un-wiring, and
   the block strip; `formatFiles` runs the Prettier pass.
 

@@ -80,7 +80,7 @@ against the [`TokenProvider`](../src/access/http/TokenProvider.ts) interface:
 4. If refresh yields no token, call `onSessionExpired()` and reject with
    `UnauthorizedError`.
 
-The template ships a `MockTokenProvider` (no-auth) so the client works for the
+The app ships a `MockTokenProvider` (no-auth) so the client works for the
 unauthenticated sample API while the flow stays fully exercised by tests.
 
 ## Testing

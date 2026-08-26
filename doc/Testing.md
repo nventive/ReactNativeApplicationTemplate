@@ -1,6 +1,6 @@
 # Testing
 
-The headless-first, three-tier testing strategy for this template.
+The headless-first, three-tier testing strategy for this app.
 
 The guiding rule: **prefer the lowest tier that can catch the bug.** Almost all
 logic lives in plain-TS Access/Business units and is covered at Tier 1; the UI

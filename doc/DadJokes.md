@@ -1,6 +1,6 @@
 # The Dad Jokes sample feature
 
-Dad Jokes is the template's **canonical vertical slice** — the reference every
+Dad Jokes is the app's **canonical vertical slice** — the reference every
 new feature is cloned from, following the recipe in
 [CLAUDE.md](../CLAUDE.md#adding-a-feature-the-canonical-recipe). It exercises
 every pattern the architecture names: interface + real + mock at the Access

@@ -1,7 +1,7 @@
 # Forced update
 
 Blocks an out-of-date app until the user updates from the store. It is one half of
-the template's remote-intervention story (the other is the
+the app's remote-intervention story (the other is the
 [kill switch](KillSwitch.md)); there are no OTA updates.
 
 ## How it works

@@ -1,6 +1,6 @@
 # Error handling
 
-The template-wide error model: a typed taxonomy produced at the Access boundary,
+The app-wide error model: a typed taxonomy produced at the Access boundary,
 a screen-level convention for rendering loading/error states, and an app-shell
 error boundary. Built on top of the HTTP client's error mapping (see
 [HTTP.md](HTTP.md)). The doctrine: *repositories throw typed errors, screens

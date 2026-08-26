@@ -1,10 +1,10 @@
 # Documentation
 
-Per-concern documentation for the React Native Application Template. Each page is
+Per-concern documentation for React Native App Template. Each page is
 a self-contained recipe for one topic; read [Architecture.md](Architecture.md)
 first for how the pieces fit together, then dip into the rest as needed.
 
-New to the template? Start with [Getting Started](GettingStarted.md), then walk
+New here? Start with [Getting Started](GettingStarted.md), then walk
 the [Dad Jokes](DadJokes.md) sample feature — the canonical vertical slice every
 new feature is cloned from.
 
@@ -57,4 +57,6 @@ new feature is cloned from.
 | Testing (three-tier strategy) | [Testing.md](Testing.md) |
 | Security scan | [SecurityScan.md](SecurityScan.md) |
 | CI pipeline | [AzurePipelines.md](AzurePipelines.md) |
+<!-- template-only:begin -->
 | Project generator CLI | [ProjectGenerator.md](ProjectGenerator.md) |
+<!-- template-only:end -->

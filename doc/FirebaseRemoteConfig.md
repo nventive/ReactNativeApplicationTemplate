@@ -5,7 +5,7 @@ The real remote-config backend behind the [remote-config seam](RemoteConfig.md) 
 values the operational features read: the forced-update minimum version and the
 kill-switch flag.
 
-Firebase is an **opt-in platform integration**: the base template ships **without**
+Firebase is an **opt-in platform integration**: the app ships **without**
 the SDK or any Firebase keys (this repo is public), runs against
 [`StaticRemoteConfigProvider`](../src/access/remoteConfig/StaticRemoteConfigProvider.ts),
 and prebuilds/boots clean. A project turns Firebase on with the steps below.
@@ -34,7 +34,7 @@ Set these two keys (and their values) in the Firebase console.
 
 ## Wiring (opt-in, keeps the default bundle SDK-free)
 
-The composition root never imports the native gateway, so the base template's
+The composition root never imports the native gateway, so the app's
 bundle and native build carry no Firebase. Activation is a one-line change at the
 app entry, passing the opt-in factory from
 [`platformIntegrations`](../src/framework/composition/platformIntegrations.ts):

@@ -1,6 +1,6 @@
 # Crash & session reporting
 
-Crash and session reporting through a single Access seam. The template ships
+Crash and session reporting through a single Access seam. The app ships
 **Bugsee for internal builds only** — it is billed per user, so it is only worth
 running on internal distribution builds, never production.
 

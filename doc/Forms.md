@@ -46,7 +46,7 @@ const submit = form.handleSubmit(async (values) => {
 });
 ```
 
-There is no backend in the template, so a valid submit reports a domain event
+There is no backend in the app, so a valid submit reports a domain event
 through the [analytics seam](Analytics.md) and treats the completed form as a
 positive moment for [app reviews](AppReviews.md). Swap the body for a
 Business-service call when a backend exists.

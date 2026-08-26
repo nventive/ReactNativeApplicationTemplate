@@ -185,6 +185,34 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * The iOS Xcode scheme/workspace/project name that `expo prebuild` derives from
+ * the app `name`. Mirrors Expo's `sanitizedName`
+ * (`@expo/config-plugins` → `ios/utils/Xcodeproj`): strip every non-word
+ * character and underscore, then drop combining diacritics. So
+ * `React Native App Template` -> `ReactNativeAppTemplate` and `Acme App` ->
+ * `AcmeApp`.
+ *
+ * The generated `ios/` project isn't committed (Continuous Native Generation),
+ * but this derived name IS hard-coded in committed files — the `iosScheme`
+ * pipeline variable in `build/variables.yml` and the `xcodebuild` examples in
+ * the docs — so a rename must rewrite it too. Miss it and the iOS build runs
+ * `xcodebuild -workspace ios/<oldName>.xcworkspace`, which prebuild never
+ * generated under that name ("… .xcworkspace does not exist").
+ *
+ * Faithful to Expo for any name with latin alphanumerics (the realistic case).
+ * A name that sanitizes to empty (e.g. all non-ASCII) falls back to `app` here,
+ * where Expo would first try a transliterated slug — an edge case a rename this
+ * tool targets does not hit.
+ */
+export function sanitizeIosScheme(name: string): string {
+  const sanitized = name
+    .replace(/[\W_]+/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return sanitized || 'app';
+}
+
 const BUNDLE_ID_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -262,12 +290,29 @@ export interface Replacement {
  * can never partially consume a longer one.
  */
 export function buildReplacements(identifiers: Identifiers): Replacement[] {
-  return [
+  const replacements: Replacement[] = [
     { from: TEMPLATE_IDENTIFIERS.internalBundleId, to: identifiers.internalBundleId },
     { from: TEMPLATE_IDENTIFIERS.baseBundleId, to: identifiers.baseBundleId },
     { from: TEMPLATE_IDENTIFIERS.slug, to: identifiers.slug },
     { from: TEMPLATE_IDENTIFIERS.appName, to: identifiers.appName },
-  ].sort((a, b) => b.from.length - a.from.length);
+  ];
+
+  // The iOS Xcode scheme/workspace name `expo prebuild` derives from the app
+  // `name` (see sanitizeIosScheme) is a *fifth* identity string, distinct from
+  // the spaced display name and the bundle ids: `React Native App Template`
+  // sanitizes to `ReactNativeAppTemplate`, which none of the four rules above
+  // match. It is hard-coded in committed files (the `iosScheme` pipeline
+  // variable, the docs' `xcodebuild` examples), so rewrite it too — otherwise
+  // the generated app's iOS build points at a workspace prebuild never makes.
+  // Skip when the sanitized name is unchanged (a rename touching only the
+  // bundle id), so no no-op rule is emitted.
+  const fromScheme = sanitizeIosScheme(TEMPLATE_IDENTIFIERS.appName);
+  const toScheme = sanitizeIosScheme(identifiers.appName);
+  if (fromScheme !== toScheme) {
+    replacements.push({ from: fromScheme, to: toScheme });
+  }
+
+  return replacements.sort((a, b) => b.from.length - a.from.length);
 }
 
 /** Applies replacements to a string, returning the result and a match count. */
@@ -435,14 +480,18 @@ export function stripTemplateOnlyBlocks(content: string): string {
 
 /**
  * Files (relative to the project root) that carry `template-only` regions the
- * generated app must not keep: the CI stage that runs this generator and its
- * documentation. Deleting the generator's `cli` folder handles the code; these
- * files instead have a marked region scrubbed in place so the rest of the file
- * (the real pipeline, the rest of the doc) survives.
+ * generated app must not keep — e.g. the CI stage that runs this generator, the
+ * "this repository is a template" framing in `CLAUDE.md`, and the doc-index link
+ * to the (deleted) generator page. Deleting the generator's `cli` folder handles
+ * the code; these files instead have a marked region scrubbed in place so the
+ * rest of the file (the real pipeline, the architecture guidance, the rest of the
+ * index) survives.
  */
 export const FILES_WITH_TEMPLATE_ONLY_BLOCKS: readonly string[] = [
   'build/azure-pipelines.yml',
   'doc/AzurePipelines.md',
+  'CLAUDE.md',
+  'doc/README.md',
 ];
 
 /**
@@ -450,7 +499,7 @@ export const FILES_WITH_TEMPLATE_ONLY_BLOCKS: readonly string[] = [
  * in place. Returns the files it changed. Idempotent — safe to run when the
  * regions are already gone.
  */
-export function stripTemplateOnlyPipelineStages(root: string): string[] {
+export function stripTemplateOnlyBlocksInFiles(root: string): string[] {
   const changed: string[] = [];
   for (const relativePath of FILES_WITH_TEMPLATE_ONLY_BLOCKS) {
     const target = join(root, relativePath);
@@ -529,10 +578,12 @@ export function generate(
     }
     // Once the cli folder is removed, its references in the tooling would break
     // the quality gates; strip them so the generated project stays green. Also
-    // scrub the template-only CI stage (and its doc) that drive this generator —
-    // they reference the now-deleted cli/ and are meaningless in a generated app.
+    // scrub every `template-only` region — the CI stage that drives this
+    // generator, the doc-index link to the deleted generator page, and the
+    // "this repository is a template" framing in CLAUDE.md / the doc index — so a
+    // generated app reads as an app, not the template it was stamped from.
     if (!dryRun) {
-      unwired = [...unwireGeneratorTooling(root), ...stripTemplateOnlyPipelineStages(root)];
+      unwired = [...unwireGeneratorTooling(root), ...stripTemplateOnlyBlocksInFiles(root)];
     }
   }
 

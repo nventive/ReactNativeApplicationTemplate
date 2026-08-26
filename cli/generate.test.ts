@@ -15,6 +15,7 @@ import {
   renderAppReadme,
   resolveIdentifiers,
   run,
+  sanitizeIosScheme,
   slugify,
   stripTemplateOnlyBlocks,
   TEMPLATE_IDENTIFIERS,
@@ -65,6 +66,21 @@ describe('slugify', () => {
   it('lowercases and hyphenates', () => {
     expect(slugify('Acme App!')).toBe('acme-app');
     expect(slugify('  Foo   Bar  ')).toBe('foo-bar');
+  });
+});
+
+describe('sanitizeIosScheme', () => {
+  it("mirrors Expo's sanitizedName: strips spaces/punctuation and diacritics", () => {
+    // The template's own name and the value hard-coded as `iosScheme`.
+    expect(sanitizeIosScheme('React Native App Template')).toBe('ReactNativeAppTemplate');
+    expect(sanitizeIosScheme('Acme App')).toBe('AcmeApp');
+    // Faithful to Expo: precomposed accented letters are non-word chars and are
+    // dropped by the first strip, so they vanish rather than de-accenting.
+    expect(sanitizeIosScheme('Café Münster')).toBe('CafMnster');
+  });
+
+  it('falls back to `app` when nothing alphanumeric survives', () => {
+    expect(sanitizeIosScheme('!!!')).toBe('app');
   });
 });
 
@@ -123,6 +139,17 @@ describe('buildReplacements', () => {
     expect(froms.indexOf(TEMPLATE_IDENTIFIERS.internalBundleId)).toBeLessThan(
       froms.indexOf(TEMPLATE_IDENTIFIERS.baseBundleId),
     );
+  });
+
+  it('includes a rule for the derived iOS scheme name', () => {
+    const rule = buildReplacements(ACME).find((r) => r.from === 'ReactNativeAppTemplate');
+    expect(rule).toEqual({ from: 'ReactNativeAppTemplate', to: 'AcmeApp' });
+  });
+
+  it('omits the scheme rule when the sanitized name is unchanged', () => {
+    const sameName: Identifiers = { ...ACME, appName: TEMPLATE_IDENTIFIERS.appName };
+    const froms = buildReplacements(sameName).map((r) => r.from);
+    expect(froms).not.toContain('ReactNativeAppTemplate');
   });
 });
 
@@ -253,6 +280,13 @@ describe('generate (filesystem)', () => {
       join(root, 'build', 'pipeline.yml'),
       `staging: ${TEMPLATE_IDENTIFIERS.internalBundleId}.jks\nprod: ${TEMPLATE_IDENTIFIERS.baseBundleId}.jks\n`,
     );
+    // The iOS scheme/workspace name expo derives from the app name — hard-coded
+    // here, and NOT one of the four identifier strings, so a dedicated rule must
+    // rewrite it (see sanitizeIosScheme).
+    writeFileSync(
+      join(root, 'build', 'variables.yml'),
+      `iosScheme: '${sanitizeIosScheme(TEMPLATE_IDENTIFIERS.appName)}'\n`,
+    );
     // Template-only CI steps template: removed, but the rest of build/ is kept.
     writeFileSync(join(root, 'build', 'templates', 'template-validation.yml'), 'steps: []\n');
     // The main pipeline carries a Template_Validation stage bracketed by markers;
@@ -304,6 +338,42 @@ describe('generate (filesystem)', () => {
       join(root, 'cli', 'generate.ts'),
       `const from = '${TEMPLATE_IDENTIFIERS.appName}';`,
     );
+    // CLAUDE.md and the doc index self-identify as a template. The title uses the
+    // Expo `name` (renamed by substitution) and the template framing sits in a
+    // `template-only` block (scrubbed in place), so a generated app reads as an app.
+    writeFileSync(
+      join(root, 'CLAUDE.md'),
+      [
+        `# ${TEMPLATE_IDENTIFIERS.appName}`,
+        '',
+        'Contributor and AI-agent instructions.',
+        '',
+        '<!-- template-only:begin -->',
+        'This repository is the **template** new apps are generated from; run `yarn generate`.',
+        '<!-- template-only:end -->',
+        '',
+        '## Architecture',
+        '',
+        'Layer boundaries that every generated app keeps.',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(root, 'doc', 'README.md'),
+      [
+        '# Documentation',
+        '',
+        `Per-concern documentation for ${TEMPLATE_IDENTIFIERS.appName}.`,
+        '',
+        '| Topic | Page |',
+        '| ----- | ---- |',
+        '| CI pipeline | [AzurePipelines.md](AzurePipelines.md) |',
+        '<!-- template-only:begin -->',
+        '| Project generator CLI | [ProjectGenerator.md](ProjectGenerator.md) |',
+        '<!-- template-only:end -->',
+        '',
+      ].join('\n'),
+    );
     writeFileSync(join(root, 'README.md'), '# Template');
   });
 
@@ -326,6 +396,10 @@ describe('generate (filesystem)', () => {
     expect(readFileSync(join(root, 'build', 'pipeline.yml'), 'utf8')).toBe(
       'staging: com.acme.internal.acmeapp.jks\nprod: com.acme.acmeapp.jks\n',
     );
+    // The iOS scheme is renamed too — `Acme App` sanitizes to `AcmeApp`.
+    expect(readFileSync(join(root, 'build', 'variables.yml'), 'utf8')).toBe(
+      "iosScheme: 'AcmeApp'\n",
+    );
 
     // Untouched binary.
     expect(readFileSync(join(root, 'icon.png'), 'utf8')).toBe(TEMPLATE_IDENTIFIERS.appName);
@@ -340,6 +414,9 @@ describe('generate (filesystem)', () => {
       const content = readFileSync(file, 'utf8');
       expect(content).not.toContain('reactnativeapptemplate');
       expect(content).not.toContain('React Native App Template');
+      // The sanitized iOS scheme name (case-sensitive; not caught by the
+      // lowercase check above) must not survive either.
+      expect(content).not.toContain('ReactNativeAppTemplate');
     }
   });
 
@@ -389,6 +466,28 @@ describe('generate (filesystem)', () => {
     expect(result.unwired).toEqual(
       expect.arrayContaining(['build/azure-pipelines.yml', 'doc/AzurePipelines.md']),
     );
+  });
+
+  it('rewrites CLAUDE.md and the doc index so the app no longer reads as a template', () => {
+    const result = generate(root, ACME);
+
+    const claude = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    // The Expo-name title is renamed, and the template framing is gone with its markers.
+    expect(claude).toContain('# Acme App');
+    expect(claude).not.toContain('template-only');
+    expect(claude).not.toContain('generated from');
+    // The architecture guidance every app keeps survives the scrub.
+    expect(claude).toContain('## Architecture');
+    expect(claude).toContain('Layer boundaries that every generated app keeps.');
+
+    const docIndex = readFileSync(join(root, 'doc', 'README.md'), 'utf8');
+    expect(docIndex).toContain('Per-concern documentation for Acme App.');
+    // The link to the deleted generator page is gone; the real rows remain.
+    expect(docIndex).not.toContain('ProjectGenerator');
+    expect(docIndex).not.toContain('template-only');
+    expect(docIndex).toContain('[AzurePipelines.md](AzurePipelines.md)');
+
+    expect(result.unwired).toEqual(expect.arrayContaining(['CLAUDE.md', 'doc/README.md']));
   });
 
   it('un-wires the generator from package.json and jest.config.js when cli is removed', () => {
