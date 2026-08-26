@@ -2,7 +2,7 @@
 
 Remotely disables the app behind a message screen while a server-side flag is
 active, and **recovers automatically** when it lifts. Together
-with [forced update](ForcedUpdate.md) it is the template's remote-intervention
+with [forced update](ForcedUpdate.md) it is the app's remote-intervention
 story (there are no OTA updates).
 
 ## How it works

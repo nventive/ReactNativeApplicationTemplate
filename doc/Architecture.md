@@ -19,7 +19,7 @@ Each layer's `README.md` states its rules; wiring is described in
 
 ## State management (MVVM)
 
-Rather than ViewModel classes with observable properties, this template keeps the
+Rather than ViewModel classes with observable properties, this app keeps the
 **principle** — business state observable by the UI, logic testable without a
 renderer — with two explicit data paths:
 

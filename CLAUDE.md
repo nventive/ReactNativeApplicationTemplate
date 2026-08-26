@@ -1,15 +1,21 @@
-# React Native Application Template
+# React Native App Template
 
 Instructions for contributors (and AI agents) working in this repository. These take
 precedence over generic assumptions about how a React Native project is laid out.
 
-## What this repository is
+## What this is
 
-A production-oriented mobile app project template built with **React Native** and
-**TypeScript** (Expo, with Continuous Native Generation). It ships a layered
-architecture, MVVM-style state management, dependency injection through a composition
-root, a set of cross-cutting concerns wired end to end, and a runnable sample feature
-so a new app can start from a working, tested baseline.
+A production-oriented mobile app built with **React Native** and **TypeScript**
+(Expo, with Continuous Native Generation). It ships a layered architecture,
+MVVM-style state management, dependency injection through a composition root, a set
+of cross-cutting concerns wired end to end, and a runnable sample feature so the app
+starts from a working, tested baseline.
+
+<!-- template-only:begin -->
+This repository is the **template** those apps are generated from. Run `yarn generate`
+to stamp out a new app — identifiers substituted, template-only scaffolding removed;
+see [doc/ProjectGenerator.md](doc/ProjectGenerator.md).
+<!-- template-only:end -->
 
 ## Architecture
 
@@ -27,7 +33,7 @@ The app is organized into layers, and within each layer code is grouped **by fea
 - **Dependency injection** wires the layers together: services are declared as
   interfaces and constructed in a single composition root
   (`src/framework/composition/createServices.ts`) — there is no DI container.
-- **Cross-cutting concerns** the template ships: environments/configuration,
+- **Cross-cutting concerns** the app ships: environments/configuration,
   logging, a diagnostics overlay, forced update, kill switch, localization, HTTP,
   local storage, serialization, navigation, and automated testing.
 - **A runnable sample feature** — the "Dad Jokes" app — demonstrates a full vertical
@@ -185,7 +191,7 @@ Operational conventions (see the matching `doc/` pages):
 Platform-integration conventions (see the matching `doc/` pages):
 
 - **Opt-in vendor SDKs.** Firebase Remote Config and Bugsee are **not** default
-  dependencies — the base template ships (and prebuilds) without them. Each SDK is
+  dependencies — the app ships (and prebuilds) without them. Each SDK is
   loaded by a **literal guarded `require`** inside a single native gateway
   (`FirebaseRemoteConfigGateway`, `NativeBugseeGateway`), reachable **only** from
   `src/framework/composition/platformIntegrations.ts`, which the app entry imports

@@ -1,6 +1,6 @@
 # Azure Pipelines
 
-CI/CD for this template runs on **Azure Pipelines**. **EAS Build is not used**:
+CI/CD for this app runs on **Azure Pipelines**. **EAS Build is not used**:
 native builds run `expo prebuild` to generate the `android/` and `ios/` projects,
 then build with **Gradle** and **Xcode** directly on the build agents.
 
@@ -174,7 +174,7 @@ one-time setup.
 **Firebase is optional and off by default.** In `build/azure-pipelines.yml` the
 `firebaseAndroidSecureFile` / `firebaseIosSecureFile` lines are **commented out**,
 so the pipeline builds Firebase-free (no `FIREBASE_ENABLED`, no
-`googleServicesFile`, a clean `expo prebuild`) — matching the base template, where
+`googleServicesFile`, a clean `expo prebuild`) — matching the app default, where
 Firebase is opt-in. The **presence of the secure-file name is the only switch**:
 uncomment the line (and upload the file) to turn Firebase on for that build; there
 is no separate flag to keep in sync. See [Enabling Firebase](#enabling-firebase).
@@ -408,7 +408,7 @@ The public repo commits **no vendor keys** — CI injects them at build time:
 ## Enabling Firebase
 
 Firebase is **off by default** so a fresh clone (with no Firebase project yet)
-builds and signs without it — matching the base template, where Firebase is
+builds and signs without it — matching the app default, where Firebase is
 opt-in. The build templates key entirely off whether a Firebase secure-file name
 was passed: no name ⇒ no download, no `FIREBASE_ENABLED`, and `expo prebuild`
 produces no Firebase native footprint.
@@ -422,7 +422,7 @@ To turn it on for a lane:
    (e.g. `google-services-reactnative-internal.json`).
 3. In `build/azure-pipelines.yml`, **uncomment** the matching
    `firebaseAndroidSecureFile` / `firebaseIosSecureFile` line in that lane's job.
-   That single line is the switch — the template derives `FIREBASE_ENABLED` from
+   That single line is the switch — the build derives `FIREBASE_ENABLED` from
    its presence, so there is no separate flag to set.
 
 To turn it back off, re-comment the line (and optionally remove the secure file).

@@ -1,6 +1,6 @@
 # Security Scan
 
-The template ships **two complementary security scans**:
+The app ships **two complementary security scans**:
 
 1. A **supply-chain (SCA) dependency audit** — the baseline, built for the
    JavaScript/React Native ecosystem (nightly, non-blocking).

@@ -4,7 +4,7 @@ The Access seam the operational features read remote, server-controlled values
 from — currently the forced-update minimum version and the kill-switch flag. A
 single provider covers both values.
 
-The template builds **entirely against the interface** with a controllable mock,
+The app builds **entirely against the interface** with a controllable mock,
 so the app runs with no backend. The real
 `@react-native-firebase/remote-config` implementation now exists as an
 **opt-in** provider — see [FirebaseRemoteConfig.md](FirebaseRemoteConfig.md);
@@ -23,7 +23,7 @@ interface RemoteConfigProvider {
 ```
 
 [`RemoteConfigValues`](../src/access/remoteConfig/RemoteConfig.ts) is the whole
-schema the template needs — the two typed values and their remote-config wire keys:
+schema the app needs — the two typed values and their remote-config wire keys:
 
 | Typed value | Remote key | Default |
 |-------------|------------|---------|
