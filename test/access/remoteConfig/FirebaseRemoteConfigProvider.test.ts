@@ -23,13 +23,33 @@ class FakeRemoteConfigGateway implements RemoteConfigGateway {
   isAvailable = true;
   configured = false;
   fetchCount = 0;
+  onConfigUpdatedCalls = 0;
   private values: Record<string, string | boolean> = {};
   private pending: Record<string, string | boolean> = {};
   private listeners: (() => void)[] = [];
+  private configureGate: Promise<void> | undefined;
+  private releaseConfigure: (() => void) | undefined;
 
   /** Stages remote values that the next `fetchAndActivate` will apply. */
   stageRemote(values: Record<string, string | boolean>): void {
     this.pending = { ...this.pending, ...values };
+  }
+
+  /** Makes the next `configure()` hang until {@link releaseConfigureNow}. */
+  blockConfigure(): void {
+    this.configureGate = new Promise((resolve) => {
+      this.releaseConfigure = resolve;
+    });
+  }
+
+  /** Releases a `configure()` blocked by {@link blockConfigure}. */
+  releaseConfigureNow(): void {
+    this.releaseConfigure?.();
+  }
+
+  /** How many real-time listeners are currently registered. */
+  get listenerCount(): number {
+    return this.listeners.length;
   }
 
   /** Simulates a real-time config update that is already activated. */
@@ -38,12 +58,12 @@ class FakeRemoteConfigGateway implements RemoteConfigGateway {
     this.listeners.forEach((listen) => listen());
   }
 
-  configure(options: RemoteConfigGatewayOptions): Promise<void> {
+  async configure(options: RemoteConfigGatewayOptions): Promise<void> {
+    if (this.configureGate) await this.configureGate;
     this.configured = true;
     for (const [key, value] of Object.entries(options.defaults)) {
       if (!(key in this.values)) this.values[key] = value;
     }
-    return Promise.resolve();
   }
 
   fetchAndActivate(): Promise<void> {
@@ -64,6 +84,7 @@ class FakeRemoteConfigGateway implements RemoteConfigGateway {
   }
 
   onConfigUpdated(listener: () => void): () => void {
+    this.onConfigUpdatedCalls += 1;
     this.listeners.push(listener);
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
@@ -71,7 +92,7 @@ class FakeRemoteConfigGateway implements RemoteConfigGateway {
   }
 }
 
-/** Lets the provider's fire-and-forget async `initialize()` settle. */
+/** Lets the provider's fire-and-forget async `start()` settle. */
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -95,6 +116,7 @@ describe('FirebaseRemoteConfigProvider', () => {
     });
     const provider = new FirebaseRemoteConfigProvider(gateway, new MockLogger(), 5);
 
+    void provider.start();
     await flush();
 
     expect(gateway.configured).toBe(true);
@@ -107,6 +129,7 @@ describe('FirebaseRemoteConfigProvider', () => {
   it('re-reads and emits on a real-time config update', async () => {
     const gateway = new FakeRemoteConfigGateway();
     const provider = new FirebaseRemoteConfigProvider(gateway, new MockLogger(), 1);
+    void provider.start();
     await flush();
 
     gateway.pushUpdate({ [REMOTE_CONFIG_KEYS.killSwitchActive]: true });
@@ -121,6 +144,7 @@ describe('FirebaseRemoteConfigProvider', () => {
     gateway.stageRemote({ [REMOTE_CONFIG_KEYS.minimumVersion]: 'not-a-version' });
     const provider = new FirebaseRemoteConfigProvider(gateway, new MockLogger(), 1);
 
+    void provider.start();
     await flush();
 
     expect(provider.getValues().minimumVersion).toEqual(REMOTE_CONFIG_DEFAULTS.minimumVersion);
@@ -131,6 +155,7 @@ describe('FirebaseRemoteConfigProvider', () => {
     gateway.stageRemote({ [REMOTE_CONFIG_KEYS.minimumVersion]: '3.0.0' });
     const provider = new FirebaseRemoteConfigProvider(gateway, new MockLogger(), 1);
 
+    void provider.start();
     await flush();
     await provider.refresh();
 
@@ -143,11 +168,42 @@ describe('FirebaseRemoteConfigProvider', () => {
     const logger = new MockLogger();
     const provider = new FirebaseRemoteConfigProvider(gateway, logger, 1);
 
+    void provider.start();
     await flush();
     await provider.refresh();
 
     expect(gateway.fetchCount).toBe(0);
     expect(provider.getValues()).toEqual(REMOTE_CONFIG_DEFAULTS);
     expect(logger.entriesOf('info').some((e) => e.message.includes('unavailable'))).toBe(true);
+  });
+
+  it('dispose during a pending configure leaves no listener registered', async () => {
+    const gateway = new FakeRemoteConfigGateway();
+    gateway.blockConfigure();
+    const provider = new FirebaseRemoteConfigProvider(gateway, new MockLogger(), 1);
+
+    void provider.start(); // awaits the blocked configure
+    provider.dispose(); // races the pending configure
+    gateway.releaseConfigureNow();
+    await flush();
+
+    expect(gateway.onConfigUpdatedCalls).toBe(0);
+    expect(gateway.listenerCount).toBe(0);
+
+    // A later real-time update must not resurrect a listener or mutate state.
+    gateway.pushUpdate({ [REMOTE_CONFIG_KEYS.killSwitchActive]: true });
+    expect(provider.getValues()).toEqual(REMOTE_CONFIG_DEFAULTS);
+  });
+
+  it('start() is idempotent — a second call registers no extra listener', async () => {
+    const gateway = new FakeRemoteConfigGateway();
+    const provider = new FirebaseRemoteConfigProvider(gateway, new MockLogger(), 1);
+
+    void provider.start();
+    void provider.start();
+    await flush();
+
+    expect(gateway.onConfigUpdatedCalls).toBe(1);
+    expect(gateway.listenerCount).toBe(1);
   });
 });

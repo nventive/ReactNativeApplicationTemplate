@@ -47,8 +47,13 @@ carries no native import and is fully Tier-1 testable:
   only file that imports expo-file-system.
 - `InMemoryFileSystemGateway` — a `Map`, injected in tests.
 
-expo-file-system has no atomic append, so `FileTransport` serializes writes onto
-a promise chain. It also implements `LogFileReader` (`read()` / `getUri()` /
+expo-file-system has no atomic append, so `FileTransport` **buffers** each line
+and drains a batch in a single read-modify-write serialized onto a promise chain
+— a burst of writes collapses into one filesystem round-trip instead of one per
+line. Every flush caps the file at `DEFAULT_MAX_LOG_FILE_BYTES` (2 MiB),
+dropping the oldest whole lines past the limit — the on-disk analogue of the
+in-memory buffer's ring trim, so `application.log` can never grow unbounded.
+`FileTransport` also implements `LogFileReader` (`read()` / `getUri()` /
 `clear()`) so the diagnostics log viewer can retrieve and export logs.
 The viewer **shares the actual `.log` file** — it passes `getUri()` to the
 [`FileSharer`](../src/access/native/FileSharer.ts) (expo-sharing), which opens the

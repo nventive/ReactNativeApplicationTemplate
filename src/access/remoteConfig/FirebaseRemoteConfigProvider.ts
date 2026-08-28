@@ -36,6 +36,8 @@ export class FirebaseRemoteConfigProvider implements RemoteConfigProvider {
   private readonly _values$: BehaviorSubject<RemoteConfigValues>;
   readonly values$: Observable<RemoteConfigValues>;
   private unsubscribe: (() => void) | undefined;
+  private started = false;
+  private disposed = false;
 
   constructor(
     private readonly gateway: RemoteConfigGateway,
@@ -44,7 +46,6 @@ export class FirebaseRemoteConfigProvider implements RemoteConfigProvider {
   ) {
     this._values$ = new BehaviorSubject<RemoteConfigValues>(REMOTE_CONFIG_DEFAULTS);
     this.values$ = this._values$.asObservable();
-    void this.initialize();
   }
 
   getValues(): RemoteConfigValues {
@@ -52,22 +53,24 @@ export class FirebaseRemoteConfigProvider implements RemoteConfigProvider {
   }
 
   async refresh(): Promise<void> {
-    if (!this.gateway.isAvailable) return;
+    if (!this.gateway.isAvailable || this.disposed) return;
     try {
       await this.gateway.fetchAndActivate();
+      if (this.disposed) return;
       this.readAndEmit();
     } catch (error) {
       this.logger.warn('Remote config refresh failed; keeping last-known values', error);
     }
   }
 
-  /** Removes the real-time listener (call on teardown / hot reload). */
-  dispose(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
-  }
-
-  private async initialize(): Promise<void> {
+  /**
+   * Configures Firebase, seeds the first values, and registers the real-time
+   * listener. Kept off the constructor so construction stays side-effect-free and
+   * the owner controls when I/O begins; idempotent and a no-op once {@link dispose}d.
+   */
+  async start(): Promise<void> {
+    if (this.started || this.disposed) return;
+    this.started = true;
     if (!this.gateway.isAvailable) {
       this.logger.info('Firebase Remote Config unavailable; serving safe defaults');
       return;
@@ -81,12 +84,26 @@ export class FirebaseRemoteConfigProvider implements RemoteConfigProvider {
         minimumFetchIntervalMillis: this.fetchIntervalMinutes * 60_000,
         fetchTimeoutMillis: FETCH_TIMEOUT_MILLIS,
       });
+      // A dispose() racing this await must not leave a listener registered.
+      if (this.disposed) return;
       this.readAndEmit();
       this.unsubscribe = this.gateway.onConfigUpdated(() => this.readAndEmit());
       await this.refresh();
     } catch (error) {
       this.logger.warn('Firebase Remote Config init failed; serving safe defaults', error);
     }
+  }
+
+  /**
+   * Removes the real-time listener and blocks any in-flight {@link start} from
+   * registering one (call on teardown / hot reload). Provider-specific — not on
+   * the `RemoteConfigProvider` interface, since only this backend has a listener
+   * to release; the owner that built it (the platform-integration wiring) calls it.
+   */
+  dispose(): void {
+    this.disposed = true;
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
   }
 
   private readAndEmit(): void {
@@ -110,9 +127,14 @@ export function createFirebaseRemoteConfigProvider(deps: {
   logger: Logger;
   fetchIntervalMinutes: number;
 }): FirebaseRemoteConfigProvider {
-  return new FirebaseRemoteConfigProvider(
+  const provider = new FirebaseRemoteConfigProvider(
     new FirebaseRemoteConfigGateway(),
     deps.logger,
     deps.fetchIntervalMinutes,
   );
+  // Kick off configuration/fetch now that the provider is built. WP7 will fold
+  // this into the composition root's explicit `start(services)` step (which also
+  // owns disposal); until then the wiring seam owns the provider's lifecycle.
+  void provider.start();
+  return provider;
 }

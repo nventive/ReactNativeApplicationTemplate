@@ -1,6 +1,6 @@
 import type { Logger } from '../logger/Logger';
 import type { BugseeGateway } from './BugseeGateway';
-import { isValidBugseeToken } from './bugseeToken';
+import { isValidBugseeToken, normalizeBugseeToken } from './bugseeToken';
 import type { CrashReporter } from './CrashReporter';
 import { NoopCrashReporter } from './NoopCrashReporter';
 
@@ -65,9 +65,11 @@ export function resolveCrashReporter(deps: {
     // Production / reporting-disabled environment: never launch Bugsee.
     return new NoopCrashReporter(deps.logger);
   }
-  if (!isValidBugseeToken(deps.token)) {
+  // Normalize once at the boundary so validation and launch see the same string.
+  const token = normalizeBugseeToken(deps.token);
+  if (!isValidBugseeToken(token)) {
     deps.logger.info('Crash reporting: no valid Bugsee token; running the no-op reporter');
     return new NoopCrashReporter(deps.logger);
   }
-  return new BugseeCrashReporter(deps.gateway, deps.token, deps.logger);
+  return new BugseeCrashReporter(deps.gateway, token, deps.logger);
 }

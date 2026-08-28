@@ -11,9 +11,9 @@ import type { FileSystemGateway } from './FileSystemGateway';
  * which is the stable surface for this use; the newer `File`/`Directory` API is
  * unnecessary here.
  *
- * expo-file-system has no atomic append, so `appendLine` is a read-modify-write.
- * `FileTransport` serializes calls into this gateway (a promise chain) so
- * concurrent appends cannot interleave.
+ * expo-file-system has no atomic append, so this gateway only reads and replaces
+ * whole files; `FileTransport` batches writes and serializes them onto a promise
+ * chain so the read-modify-write it does on top can never interleave.
  */
 export class ExpoFileSystemGateway implements FileSystemGateway {
   readonly documentDirectory = FileSystem.documentDirectory ?? 'file:///';
@@ -23,16 +23,15 @@ export class ExpoFileSystemGateway implements FileSystemGateway {
     return info.exists;
   }
 
-  async appendLine(uri: string, line: string): Promise<void> {
-    const previous = (await this.exists(uri)) ? await FileSystem.readAsStringAsync(uri) : '';
-    await FileSystem.writeAsStringAsync(uri, previous + line + '\n');
-  }
-
   async readAsString(uri: string): Promise<string> {
     if (!(await this.exists(uri))) {
       return '';
     }
     return FileSystem.readAsStringAsync(uri);
+  }
+
+  async writeString(uri: string, content: string): Promise<void> {
+    await FileSystem.writeAsStringAsync(uri, content);
   }
 
   async delete(uri: string): Promise<void> {

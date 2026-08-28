@@ -9,9 +9,24 @@ import { Platform } from 'react-native';
 export const BUGSEE_TOKEN_FORMAT =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-/** Whether a token is present and well-formed enough to launch Bugsee with. */
+/**
+ * Normalizes a build-injected token to the single string used for **both**
+ * validation and launch — trimming whitespace a CI variable can pick up, and
+ * mapping an empty result to `undefined`. Call this once at the crash-reporting
+ * boundary ({@link resolveCrashReporter}) so the validated and launched values
+ * can never diverge.
+ */
+export function normalizeBugseeToken(token: string | undefined): string | undefined {
+  const trimmed = token?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Whether a token is well-formed enough to launch Bugsee with. Expects a value
+ * already run through {@link normalizeBugseeToken}.
+ */
 export function isValidBugseeToken(token: string | undefined): token is string {
-  return typeof token === 'string' && BUGSEE_TOKEN_FORMAT.test(token.trim());
+  return typeof token === 'string' && BUGSEE_TOKEN_FORMAT.test(token);
 }
 
 /**

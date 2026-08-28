@@ -105,6 +105,19 @@ describe('resolveCrashReporter (the gate)', () => {
     expect(gateway.exceptions).toContain(error);
   });
 
+  it('launches with the trimmed token when the injected value has stray whitespace', () => {
+    const gateway = new FakeBugseeGateway(true);
+    const reporter = resolveCrashReporter({
+      crashReportingEnabled: true,
+      token: `  ${VALID_TOKEN}\n`,
+      gateway,
+      logger: new MockLogger(),
+    });
+
+    expect(reporter.isEnabled).toBe(true);
+    expect(gateway.launchedToken).toBe(VALID_TOKEN); // trimmed, not the raw value
+  });
+
   it('degrades to a disabled reporter when the SDK is absent', () => {
     const gateway = new FakeBugseeGateway(false); // package not installed
     const reporter = resolveCrashReporter({

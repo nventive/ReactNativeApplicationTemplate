@@ -108,4 +108,39 @@ describe('FileTransport', () => {
 
     expect(transport.getUri()).toBe('file:///memory/app.log');
   });
+
+  it('batches a burst of writes into a single filesystem write', async () => {
+    const gateway = new InMemoryFileSystemGateway();
+    const writeSpy = jest.spyOn(gateway, 'writeString');
+    const transport = new FileTransport(gateway, 'test.log');
+
+    transport.write({ level: 'info', message: 'a', timestamp: new Date('2026-01-01') });
+    transport.write({ level: 'info', message: 'b', timestamp: new Date('2026-01-01') });
+    transport.write({ level: 'info', message: 'c', timestamp: new Date('2026-01-01') });
+    await transport.flush();
+
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    const contents = await transport.read();
+    expect(contents.trim().split('\n')).toHaveLength(3);
+  });
+
+  it('caps the file at maxBytes, dropping the oldest lines', async () => {
+    const gateway = new InMemoryFileSystemGateway();
+    const transport = new FileTransport(gateway, 'capped.log', { maxBytes: 500 });
+
+    for (let i = 0; i < 100; i += 1) {
+      transport.write({
+        level: 'info',
+        message: `entry-${String(i).padStart(3, '0')}`,
+        timestamp: new Date('2026-01-01'),
+      });
+      await transport.flush(); // drain per entry so the file accumulates across flushes
+    }
+
+    const contents = await transport.read();
+    // Entries are pure ASCII, so character length equals the UTF-8 byte cap.
+    expect(contents.length).toBeLessThanOrEqual(500);
+    expect(contents).toContain('entry-099'); // newest kept
+    expect(contents).not.toContain('entry-000'); // oldest dropped
+  });
 });
