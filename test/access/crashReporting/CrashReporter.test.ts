@@ -87,7 +87,9 @@ describe('resolveCrashReporter (the gate)', () => {
     expect(badToken).toBeInstanceOf(NoopCrashReporter);
   });
 
-  it('launches Bugsee on an internal build with a valid token and reports errors', () => {
+  it('builds an enabled reporter without launching until start() is called', () => {
+    // Construction is side-effect-free (composition-root purity): the resolve gate
+    // decides `isEnabled`, but the Bugsee session launches only on start().
     const gateway = new FakeBugseeGateway(true);
     const reporter = resolveCrashReporter({
       crashReportingEnabled: true,
@@ -98,7 +100,26 @@ describe('resolveCrashReporter (the gate)', () => {
 
     expect(reporter).toBeInstanceOf(BugseeCrashReporter);
     expect(reporter.isEnabled).toBe(true);
+    expect(gateway.launchedToken).toBeUndefined(); // not launched on construction
+
+    (reporter as BugseeCrashReporter).start();
     expect(gateway.launchedToken).toBe(VALID_TOKEN);
+
+    // start() is idempotent — a second call does not relaunch.
+    gateway.launchedToken = undefined;
+    (reporter as BugseeCrashReporter).start();
+    expect(gateway.launchedToken).toBeUndefined();
+  });
+
+  it('reports errors once launched', () => {
+    const gateway = new FakeBugseeGateway(true);
+    const reporter = resolveCrashReporter({
+      crashReportingEnabled: true,
+      token: VALID_TOKEN,
+      gateway,
+      logger: new MockLogger(),
+    });
+    (reporter as BugseeCrashReporter).start();
 
     const error = new Error('boom');
     reporter.recordError(error);
@@ -115,6 +136,7 @@ describe('resolveCrashReporter (the gate)', () => {
     });
 
     expect(reporter.isEnabled).toBe(true);
+    (reporter as BugseeCrashReporter).start();
     expect(gateway.launchedToken).toBe(VALID_TOKEN); // trimmed, not the raw value
   });
 

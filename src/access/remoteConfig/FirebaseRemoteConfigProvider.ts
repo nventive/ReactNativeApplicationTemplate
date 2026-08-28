@@ -122,19 +122,18 @@ export class FirebaseRemoteConfigProvider implements RemoteConfigProvider {
  * the app entry when Firebase is activated — never from the default composition
  * root (which keeps the base template's bundle SDK-free). Pass it to
  * `createServices({ remoteConfigFactory: createFirebaseRemoteConfigProvider })`.
+ *
+ * The provider is returned **unstarted**: the composition root's explicit
+ * `startServices` step calls {@link FirebaseRemoteConfigProvider.start} (and owns
+ * disposal), so construction stays side-effect-free.
  */
 export function createFirebaseRemoteConfigProvider(deps: {
   logger: Logger;
   fetchIntervalMinutes: number;
 }): FirebaseRemoteConfigProvider {
-  const provider = new FirebaseRemoteConfigProvider(
+  return new FirebaseRemoteConfigProvider(
     new FirebaseRemoteConfigGateway(),
     deps.logger,
     deps.fetchIntervalMinutes,
   );
-  // Kick off configuration/fetch now that the provider is built. WP7 will fold
-  // this into the composition root's explicit `start(services)` step (which also
-  // owns disposal); until then the wiring seam owns the provider's lifecycle.
-  void provider.start();
-  return provider;
 }

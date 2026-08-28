@@ -158,6 +158,10 @@ const config: ExpoConfig = {
   // vars; they are empty in the repo and on production lanes.
   extra: {
     defaultEnvironment: resolveDefaultEnvironment(),
+    // Surfaces the native Firebase footprint flag to the JS side so the app entry
+    // can warn when native inclusion and JS wiring disagree (see
+    // `src/framework/composition/startServices.ts`).
+    firebaseEnabled,
     bugsee: {
       ios: process.env.BUGSEE_IOS_TOKEN,
       android: process.env.BUGSEE_ANDROID_TOKEN,

@@ -232,12 +232,13 @@ export function createServices(overrides: ServiceOverrides = {}): Services {
   // Access — crash & session reporting seam. No-op by default (production / store
   // builds ship no reporting SDK); the app entry passes a `crashReporterFactory`
   // to activate Bugsee on internal builds. The factory itself enforces
-  // "internal-only + valid token"; see `platformIntegrations`.
+  // "internal-only + valid token"; see `platformIntegrations`. The reporter is
+  // built here but not launched or attributed — `startServices` owns those runtime
+  // side effects, keeping this a pure construction pass.
   const crashReporter =
     overrides.crashReporter ??
     overrides.crashReporterFactory?.({ logger, config: environmentConfig }) ??
     new NoopCrashReporter(logger);
-  crashReporter.setAttribute('environment', environment.getCurrent());
 
   // Access — external URL opening (store pages for forced update) and file
   // sharing (the log file for the diagnostics viewer).

@@ -5,23 +5,38 @@ import type { CrashReporter } from './CrashReporter';
 import { NoopCrashReporter } from './NoopCrashReporter';
 
 /**
- * The Bugsee-backed {@link CrashReporter}. Launches a Bugsee session on
- * construction and forwards errors/events/attributes to the SDK through a
- * {@link BugseeGateway}. It is constructed only when reporting should be active
- * (see {@link resolveCrashReporter}); if the SDK turns out to be absent it
+ * The Bugsee-backed {@link CrashReporter}. Launches a Bugsee session when
+ * {@link start} is called and forwards errors/events/attributes to the SDK
+ * through a {@link BugseeGateway}. It is constructed only when reporting should be
+ * active (see {@link resolveCrashReporter}); if the SDK turns out to be absent it
  * degrades to a safe no-op with {@link isEnabled} `false`.
+ *
+ * Construction is side-effect-free: the launch (the async I/O) is deferred to
+ * {@link start}, invoked once by the composition root's `startServices` step, so
+ * construction order never silently becomes I/O order.
  */
 export class BugseeCrashReporter implements CrashReporter {
   readonly isEnabled: boolean;
+  private launched = false;
 
   constructor(
     private readonly gateway: BugseeGateway,
-    token: string,
+    private readonly token: string,
     private readonly logger: Logger,
   ) {
     this.isEnabled = gateway.isAvailable;
+  }
+
+  /**
+   * Launches the Bugsee session. Idempotent, and a no-op when the SDK is absent
+   * ({@link isEnabled} is `false`). Kept off the constructor so wiring stays
+   * pure; the `startServices` step calls it once after the graph is built.
+   */
+  start(): void {
+    if (this.launched) return;
+    this.launched = true;
     if (this.isEnabled) {
-      gateway.launch(token).catch((error: unknown) => {
+      this.gateway.launch(this.token).catch((error: unknown) => {
         this.logger.warn('Bugsee launch failed; crash reporting inactive this session', error);
       });
     } else {

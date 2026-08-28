@@ -52,36 +52,47 @@ token only for internal lanes, so production stays off.
 
 - **Unhandled UI errors** — [`ConnectedErrorBoundary`](../src/presentation/shell/ConnectedErrorBoundary.tsx)
   calls `recordError` on a render-phase crash, alongside the `fatal` log.
-- **Environment attribute** — the composition root tags reports with the active
-  environment.
+- **Environment attribute** — the `startServices` step tags reports with the
+  active environment (after the launch, kept out of the pure wiring pass).
 - **Diagnostics** — the [crash-reporting section](Diagnostics.md) shows whether
   reporting is active and offers a **"log a test exception"** button on internal
   builds, so a build can be verified against the Bugsee dashboard.
 
 ## Wiring (opt-in, keeps the default bundle SDK-free)
 
-Like Firebase, the composition root never imports the Bugsee gateway. Activate it
-from the app entry with the opt-in factory:
+**The wiring is already in place** — no code edit is needed to activate. The app
+entry always spreads the opt-in overrides into `createServices`:
 
 ```ts
-// src/app/App.tsx — after installing react-native-bugsee
-import { platformIntegrationOverrides } from '../framework/composition/platformIntegrations';
-
+// src/app/App.tsx (already wired)
 const services = createServices(platformIntegrationOverrides());
+startServices(services);
 ```
+
+[`platformIntegrationOverrides()`](../src/framework/composition/platformIntegrations.ts)
+**probes for the SDK**: with `react-native-bugsee` absent (the default template) it
+returns `{}`, so the reporter stays `NoopCrashReporter` and importing the seam
+pulls in no Bugsee code (the guarded `require` only runs on gateway construction).
+Once the package is installed, the override appears and `resolveCrashReporter` runs
+the gate below.
+
+The Bugsee session is **launched by [`startServices`](../src/framework/composition/startServices.ts)**,
+not on construction — the reporter is built pure and the launch (the async I/O)
+happens in the explicit start step, so construction order never becomes I/O order.
 
 ## Activation steps
 
 1. `yarn add react-native-bugsee` (iOS also needs `pod install`; see the Bugsee
    RN docs — and add the `PrivacyInfo.xcprivacy` Podfile tweak if archiving
    flags it).
-2. Wire the reporter in `App.tsx` (snippet above).
-3. Provide the platform tokens **at build time** (never committed):
+2. Provide the platform tokens **at build time** (never committed):
    `BUGSEE_IOS_TOKEN` / `BUGSEE_ANDROID_TOKEN`. `app.config.ts` surfaces them
    through `extra.bugsee`; [`getBugseeToken`](../src/access/crashReporting/bugseeToken.ts)
    reads the current platform's.
-4. Build an **internal** (dev/staging) release and confirm a test exception from
+3. Build an **internal** (dev/staging) release and confirm a test exception from
    the diagnostics overlay reaches your Bugsee dashboard.
+
+No `App.tsx` edit is needed — the seam is already wired (see above).
 
 ## Secrets — tokens are never committed
 

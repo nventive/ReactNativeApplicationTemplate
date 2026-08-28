@@ -34,21 +34,31 @@ Set these two keys (and their values) in the Firebase console.
 
 ## Wiring (opt-in, keeps the default bundle SDK-free)
 
-The composition root never imports the native gateway, so the app's
-bundle and native build carry no Firebase. Activation is a one-line change at the
-app entry, passing the opt-in factory from
-[`platformIntegrations`](../src/framework/composition/platformIntegrations.ts):
+**The wiring is already in place** — no code edit is needed to activate. The app
+entry always spreads the opt-in overrides into `createServices`:
 
 ```ts
-// src/app/App.tsx — after installing the packages and adding config files
-import { platformIntegrationOverrides } from '../framework/composition/platformIntegrations';
-
+// src/app/App.tsx (already wired)
 const services = createServices(platformIntegrationOverrides());
+startServices(services);
 ```
 
-`createServices` then uses `FirebaseRemoteConfigProvider` on the non-mock path
-(when mocking is on, the controllable mock still wins so the diagnostics triggers
-work). Per-environment fetch cadence comes from
+[`platformIntegrationOverrides()`](../src/framework/composition/platformIntegrations.ts)
+**probes for the SDK**: with `@react-native-firebase/remote-config` absent (the
+default template) it returns `{}`, so the graph is exactly the SDK-free one and
+importing the seam pulls in no Firebase code (the guarded `require` only runs on
+gateway construction). Once the package is installed, the override appears and
+`createServices` uses `FirebaseRemoteConfigProvider` on the non-mock path (when
+mocking is on, the controllable mock still wins so the diagnostics triggers work).
+
+The provider is **started by [`startServices`](../src/framework/composition/startServices.ts)**,
+not on construction — the composition root stays a pure construction pass.
+`startServices` also **warns loudly when the two Firebase switches disagree**: the
+native footprint (`FIREBASE_ENABLED`) and the JS SDK. Native config with no JS SDK
+installed silently serves defaults; a wired JS SDK with no native app fails every
+fetch — either logs an error at startup so the misconfiguration surfaces.
+
+Per-environment fetch cadence comes from
 [`EnvironmentConfig.remoteConfig.fetchIntervalMinutes`](../src/business/environment/EnvironmentService.ts)
 — short in dev/staging, 12 h in production.
 
@@ -61,13 +71,17 @@ work). Per-environment fetch cadence comes from
 2. **Add the native config files** (see *Secrets* below) at the repo root:
    `google-services.json` (Android) and `GoogleService-Info.plist` (iOS).
 3. **Enable it at build time** so `app.config.ts` wires the config plugin and the
-   `googleServicesFile` paths:
+   `googleServicesFile` paths (and surfaces `extra.firebaseEnabled` so the wiring
+   guard can confirm the JS SDK matches):
    ```bash
    FIREBASE_ENABLED=true npx expo prebuild   # use cross-env on Windows / a CI variable
    ```
-4. **Wire the provider** in `App.tsx` (snippet above).
-5. Create the `minimum_version` / `is_kill_switch_active` keys in the Firebase
+4. Create the `minimum_version` / `is_kill_switch_active` keys in the Firebase
    console and confirm forced update / kill switch respond on a dev build.
+
+No `App.tsx` edit is needed — the seam is already wired (see above). If you install
+the SDK **without** setting `FIREBASE_ENABLED` (or vice versa), `startServices`
+logs an error at startup naming the missing half.
 
 ## Secrets — keys are never committed
 

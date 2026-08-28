@@ -194,11 +194,19 @@ Platform-integration conventions (see the matching `doc/` pages):
   dependencies — the app ships (and prebuilds) without them. Each SDK is
   loaded by a **literal guarded `require`** inside a single native gateway
   (`FirebaseRemoteConfigGateway`, `NativeBugseeGateway`), reachable **only** from
-  `src/framework/composition/platformIntegrations.ts`, which the app entry imports
-  to activate. The default `createServices()` never imports them, so the base
-  bundle/native build stay SDK-free. Add a new opt-in integration the same way (a
-  gateway behind an interface + a `*Factory` override), never a bare SDK import in
-  the default graph. See [doc/FirebaseRemoteConfig.md](doc/FirebaseRemoteConfig.md),
+  `src/framework/composition/platformIntegrations.ts`. The app entry always spreads
+  `platformIntegrationOverrides()` into `createServices`; it probes each SDK and
+  returns `{}` when neither is installed, so the default template graph is exactly
+  the SDK-free one and the base bundle stays SDK-free (importing the seam is safe —
+  the guarded `require` only runs on gateway construction). Installing an SDK lights
+  up its factory. The composition root stays a **pure construction pass**: the
+  explicit `startServices(services)` step (called once by the app entry) owns the
+  runtime launches (Bugsee session, Firebase provider `start()`), the environment
+  attribute, and a **loud warning when the Firebase native footprint
+  (`FIREBASE_ENABLED`) and the JS SDK wiring disagree**. Add a new opt-in
+  integration the same way (a gateway behind an interface + a `*Factory` override,
+  launched from `startServices` if it needs one), never a bare SDK import in the
+  default graph. See [doc/FirebaseRemoteConfig.md](doc/FirebaseRemoteConfig.md),
   [doc/CrashReporting.md](doc/CrashReporting.md).
 - **No vendor keys in the repo (it is public).** Firebase config files are
   gitignored (commit only the `.example` placeholders) and CI-injects them per
