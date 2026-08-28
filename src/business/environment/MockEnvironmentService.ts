@@ -11,8 +11,11 @@ import { ENVIRONMENT_CONFIGS } from './environments';
 /**
  * In-memory `EnvironmentService` with no persistence, for Tier-1 tests of
  * consumers (HTTP client, features) that just need a fixed environment. Its
- * `setEnvironment`/`reset` update `pending$` like the real service but never
- * touch storage.
+ * `setEnvironment`/`reset` update `pending$` exactly like the real service —
+ * including `reset()` raising a pending change back to the build default when the
+ * current environment differs from it — but never touch storage. Pass
+ * `buildDefault` (defaults to `initial`) to model a session that launched from a
+ * persisted override.
  */
 export class MockEnvironmentService implements EnvironmentService {
   readonly available = ENVIRONMENTS;
@@ -23,7 +26,10 @@ export class MockEnvironmentService implements EnvironmentService {
   readonly current$;
   readonly pending$;
 
-  constructor(initial: Environment = 'development') {
+  constructor(
+    initial: Environment = 'development',
+    private readonly buildDefault: Environment = initial,
+  ) {
     this._current$ = new BehaviorSubject<Environment>(initial);
     this.current$ = this._current$.asObservable();
     this.pending$ = this._pending$.asObservable();
@@ -43,7 +49,7 @@ export class MockEnvironmentService implements EnvironmentService {
   }
 
   reset(): Promise<void> {
-    this._pending$.next(null);
+    this._pending$.next(this.buildDefault === this.getCurrent() ? null : this.buildDefault);
     return Promise.resolve();
   }
 }

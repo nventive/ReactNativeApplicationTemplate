@@ -29,7 +29,12 @@ interface AppReviewGateway {
 **Business — the policy.**
 [`AppReviewService`](../src/business/appReview/AppReviewService.ts) exposes one
 call, `requestReviewIfAppropriate()`. [`DefaultAppReviewService`](../src/business/appReview/DefaultAppReviewService.ts)
-enforces the two store-guideline rules:
+owns the **plumbing** — counting positive signals, persisting state across
+restarts, calling the native prompt, and logging every branch — and delegates the
+**rule** (the *when*) to a pluggable [`AppReviewPolicy`](../src/business/appReview/AppReviewPolicy.ts).
+
+The default rule ([`createDefaultAppReviewPolicy`](../src/business/appReview/AppReviewPolicy.ts))
+enforces the two store-guideline constraints:
 
 - prompt only after **N positive signals** (`DEFAULT_SIGNAL_THRESHOLD = 3`), and
 - prompt **at most once per installed app version**.
@@ -38,6 +43,35 @@ State (signal count, last-prompted version) is persisted in the injected
 [`KeyValueStore`](LocalStorage.md), so it survives restarts; the installed
 version comes from [`CurrentVersionRepository`](../src/access/appInfo/CurrentVersionRepository.ts).
 The call never throws — a review prompt must not break the flow that triggered it.
+
+The signal count **carries over across versions**: it is reset only after a
+prompt actually fires, so signals earned below the threshold (or while a prompt
+was declined/unavailable) still count toward a later version's prompt. This is
+intentional — the default rule reads as "N lifetime positive signals, then once
+per version."
+
+### Customizing the rule
+
+Every app is expected to tune *when* it prompts — this is the main seam. A
+policy is a **pure, synchronous** function of the accumulated `signalCount` and
+the version state, so it is trivial to write and unit-test in isolation
+(`test/business/appReview/AppReviewPolicy.test.ts`). Change it at the composition
+root ([`createServices.ts`](../src/framework/composition/createServices.ts)):
+
+```ts
+// Same rules, different threshold:
+new DefaultAppReviewService(gateway, store, versionRepo, logger, createDefaultAppReviewPolicy(5));
+
+// Fully custom rule (e.g. strict per-version counting, or a cooldown):
+const policy: AppReviewPolicy = ({ signalCount, currentVersion, lastPromptedVersion }) =>
+  signalCount >= 5 && lastPromptedVersion !== currentVersion
+    ? { outcome: 'prompt' }
+    : { outcome: 'skip', reason: 'not appropriate yet' };
+new DefaultAppReviewService(gateway, store, versionRepo, logger, policy);
+```
+
+The `reason` on a `skip` lands in the diagnostics log, so it stays clear why a
+prompt did or didn't fire.
 
 ## Using it
 

@@ -38,7 +38,7 @@ describe('Jokes slice (headless integration)', () => {
     const jokes = await services.jokes.fetchJokes();
     expect(jokes).toEqual(fixtureJokes);
 
-    const emitted: Joke[][] = [];
+    const emitted: (readonly Joke[])[] = [];
     const subscription = services.jokes.favorites$.subscribe((favorites) =>
       emitted.push(favorites),
     );

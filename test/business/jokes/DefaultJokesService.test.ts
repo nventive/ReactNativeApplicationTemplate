@@ -39,7 +39,7 @@ describe('DefaultJokesService', () => {
   it('starts with no favorites', () => {
     const { service } = makeService();
 
-    const emitted: Joke[][] = [];
+    const emitted: (readonly Joke[])[] = [];
     const subscription = service.favorites$.subscribe((favorites) => emitted.push(favorites));
 
     expect(emitted).toEqual([[]]);
@@ -49,7 +49,7 @@ describe('DefaultJokesService', () => {
   it('toggleFavorite adds then removes, emitting on every change', () => {
     const { service } = makeService();
 
-    const emitted: Joke[][] = [];
+    const emitted: (readonly Joke[])[] = [];
     const subscription = service.favorites$.subscribe((favorites) => emitted.push(favorites));
 
     service.toggleFavorite(jokeA);
@@ -75,7 +75,7 @@ describe('DefaultJokesService', () => {
   it('emits immutable snapshots (a new list instance per change)', () => {
     const { service } = makeService();
 
-    const emitted: Joke[][] = [];
+    const emitted: (readonly Joke[])[] = [];
     const subscription = service.favorites$.subscribe((favorites) => emitted.push(favorites));
 
     service.toggleFavorite(jokeA);
@@ -89,7 +89,7 @@ describe('DefaultJokesService', () => {
     const { service } = makeService();
     service.toggleFavorite(jokeA);
 
-    const emitted: Joke[][] = [];
+    const emitted: (readonly Joke[])[] = [];
     const subscription = service.favorites$.subscribe((favorites) => emitted.push(favorites));
 
     expect(emitted).toEqual([[jokeA]]);
@@ -116,7 +116,7 @@ describe('DefaultJokesService', () => {
 
       const { service } = makeService(store);
 
-      const emitted: Joke[][] = [];
+      const emitted: (readonly Joke[])[] = [];
       const subscription = service.favorites$.subscribe((favorites) => emitted.push(favorites));
 
       expect(emitted).toEqual([[jokeA]]);
@@ -133,7 +133,7 @@ describe('DefaultJokesService', () => {
       // A fresh service over the same store = an app relaunch.
       const second = makeService(store).service;
 
-      const emitted: Joke[][] = [];
+      const emitted: (readonly Joke[])[] = [];
       const subscription = second.favorites$.subscribe((favorites) => emitted.push(favorites));
 
       expect(emitted).toEqual([[jokeA, jokeB]]);
@@ -146,7 +146,7 @@ describe('DefaultJokesService', () => {
 
       const { service, logger } = makeService(store);
 
-      const emitted: Joke[][] = [];
+      const emitted: (readonly Joke[])[] = [];
       const subscription = service.favorites$.subscribe((favorites) => emitted.push(favorites));
 
       expect(emitted).toEqual([[]]);
@@ -162,7 +162,7 @@ describe('DefaultJokesService', () => {
       const { service, logger } = makeService(store);
 
       expect(logger.entriesOf('warn')).toHaveLength(1);
-      let value: Joke[] | undefined;
+      let value: readonly Joke[] | undefined;
       const subscription = service.favorites$.subscribe((favorites) => (value = favorites));
       expect(value).toEqual([]);
       subscription.unsubscribe();

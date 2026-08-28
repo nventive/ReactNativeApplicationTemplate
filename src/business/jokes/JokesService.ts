@@ -16,9 +16,11 @@ export interface JokesService {
 
   /**
    * The favorite jokes — live source of truth backed by a `BehaviorSubject`.
-   * Emits the full list on every change.
+   * Emits the full list on every change. The list is `readonly` so consumers
+   * cannot mutate live business state in place; toggle through
+   * {@link toggleFavorite}.
    */
-  readonly favorites$: Observable<Joke[]>;
+  readonly favorites$: Observable<readonly Joke[]>;
 
   /** Adds the joke to favorites, or removes it if already present. */
   toggleFavorite(joke: Joke): void;

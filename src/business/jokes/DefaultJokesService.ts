@@ -3,6 +3,7 @@ import { BehaviorSubject, type Observable } from 'rxjs';
 import type { AnalyticsSink } from '../../access/analytics/AnalyticsSink';
 import { favoriteJokesSchema, type Joke } from '../../access/jokes/Joke';
 import type { JokesRepository } from '../../access/jokes/JokesRepository';
+import { LOG_CATEGORY_KEY } from '../../access/logger/LogCategory';
 import type { Logger } from '../../access/logger/Logger';
 import type { KeyValueStore } from '../../access/storage/KeyValueStore';
 import type { JokesService } from './JokesService';
@@ -10,19 +11,22 @@ import type { JokesService } from './JokesService';
 /** Storage key the favorites list is persisted under. */
 const FAVORITES_KEY = 'jokes.favorites';
 
+/** Log category stamped on this service's entries (filterable in the console). */
+const LOG_CATEGORY = 'jokes';
+
 /**
  * Plain-TS implementation — no React imports, fully headless-testable.
  * Favorites are persisted through a single injected `KeyValueStore`.
  *
- * Favorites are the live **source of truth**: a `BehaviorSubject<Joke[]>`
+ * Favorites are the live **source of truth**: a `BehaviorSubject<readonly Joke[]>`
  * rehydrated on construction and re-persisted on every mutation. Because
  * `KeyValueStore` (MMKV) is synchronous, rehydration happens inline in the
  * constructor — no async-in-constructor needed, since the read is immediate.
  * Every emission is a new immutable list.
  */
 export class DefaultJokesService implements JokesService {
-  private readonly _favorites$: BehaviorSubject<Joke[]>;
-  readonly favorites$: Observable<Joke[]>;
+  private readonly _favorites$: BehaviorSubject<readonly Joke[]>;
+  readonly favorites$: Observable<readonly Joke[]>;
 
   constructor(
     private readonly repository: JokesRepository,
@@ -30,7 +34,7 @@ export class DefaultJokesService implements JokesService {
     private readonly logger: Logger,
     private readonly analytics: AnalyticsSink,
   ) {
-    this._favorites$ = new BehaviorSubject<Joke[]>(this.readPersistedFavorites());
+    this._favorites$ = new BehaviorSubject<readonly Joke[]>(this.readPersistedFavorites());
     this.favorites$ = this._favorites$.asObservable();
   }
 
@@ -49,6 +53,7 @@ export class DefaultJokesService implements JokesService {
     this.persistFavorites(next);
     this.logger.info(
       isFavorite ? `Removed joke ${joke.id} from favorites` : `Added joke ${joke.id} to favorites`,
+      { [LOG_CATEGORY_KEY]: LOG_CATEGORY },
     );
     // A domain event through the analytics seam, alongside the navigation
     // screen-view tracking.
@@ -72,9 +77,13 @@ export class DefaultJokesService implements JokesService {
       if (parsed.success) {
         return parsed.data;
       }
-      this.logger.warn('Discarding corrupt persisted favorites', parsed.error);
+      this.logger.warn('Discarding corrupt persisted favorites', parsed.error, {
+        [LOG_CATEGORY_KEY]: LOG_CATEGORY,
+      });
     } catch (error) {
-      this.logger.warn('Discarding unreadable persisted favorites', error);
+      this.logger.warn('Discarding unreadable persisted favorites', error, {
+        [LOG_CATEGORY_KEY]: LOG_CATEGORY,
+      });
     }
     return [];
   }

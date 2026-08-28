@@ -23,6 +23,10 @@ export interface DiagnosticsService {
   /** Hides the overlay for the rest of this app run (not persisted). */
   dismissForSession(): void;
 
-  /** Persists a permanent disable; the overlay stays hidden on future launches. */
-  disablePermanently(): Promise<void>;
+  /**
+   * Persists a permanent disable; the overlay stays hidden on future launches.
+   * Synchronous — the underlying `KeyValueStore` (MMKV) write is synchronous, so
+   * there is nothing to await.
+   */
+  disablePermanently(): void;
 }

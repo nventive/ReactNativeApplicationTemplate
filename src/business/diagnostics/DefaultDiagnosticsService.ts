@@ -36,9 +36,8 @@ export class DefaultDiagnosticsService implements DiagnosticsService {
     this._isAvailable$.next(false);
   }
 
-  disablePermanently(): Promise<void> {
+  disablePermanently(): void {
     this.store.setBoolean(DIAGNOSTICS_DISABLED_KEY, true);
     this._isAvailable$.next(false);
-    return Promise.resolve();
   }
 }

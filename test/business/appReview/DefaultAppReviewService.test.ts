@@ -9,6 +9,7 @@ import { MockLogger } from '../../../src/access/logger/MockLogger';
 import { InMemoryKeyValueStore } from '../../../src/access/storage/InMemoryKeyValueStore';
 import type { KeyValueStore } from '../../../src/access/storage/KeyValueStore';
 import { version, type Version } from '../../../src/access/version/Version';
+import type { AppReviewPolicy } from '../../../src/business/appReview/AppReviewPolicy';
 import {
   DEFAULT_SIGNAL_THRESHOLD,
   DefaultAppReviewService,
@@ -28,12 +29,14 @@ function makeService(options?: {
   store?: KeyValueStore;
   gateway?: InMemoryAppReviewGateway;
   versionRepo?: FixedVersionRepository;
+  policy?: AppReviewPolicy;
 }) {
   const store = options?.store ?? new InMemoryKeyValueStore();
   const gateway = options?.gateway ?? new InMemoryAppReviewGateway();
   const versionRepo = options?.versionRepo ?? new FixedVersionRepository(version(1, 0, 0));
   const logger = new MockLogger();
-  const service = new DefaultAppReviewService(gateway, store, versionRepo, logger);
+  // `undefined` falls through to the constructor's default policy.
+  const service = new DefaultAppReviewService(gateway, store, versionRepo, logger, options?.policy);
   return { service, store, gateway, versionRepo, logger };
 }
 
@@ -110,6 +113,36 @@ describe('DefaultAppReviewService', () => {
     const prompted = await second.requestReviewIfAppropriate();
 
     expect(prompted).toBe(true);
+    expect(gateway.requestedCount).toBe(1);
+  });
+
+  it('carries the signal count over across versions (documented behavior)', async () => {
+    const versionRepo = new FixedVersionRepository(version(1, 0, 0));
+    const { service, gateway } = makeService({ versionRepo });
+
+    // One signal short of the threshold on v1.0.0 — no prompt, count carries over.
+    await requestTimes(service, DEFAULT_SIGNAL_THRESHOLD - 1);
+    expect(gateway.requestedCount).toBe(0);
+
+    // A version bump does not reset the count: the carried-over signals plus one
+    // more on v1.1.0 cross the threshold and prompt.
+    versionRepo.setVersion(version(1, 1, 0));
+    const prompted = await service.requestReviewIfAppropriate();
+
+    expect(prompted).toBe(true);
+    expect(gateway.requestedCount).toBe(1);
+  });
+
+  it('honors a custom policy — the when-to-prompt rules are pluggable', async () => {
+    // A project-specific rule: only prompt once five lifetime signals accrue.
+    const policy: AppReviewPolicy = ({ signalCount }) =>
+      signalCount >= 5 ? { outcome: 'prompt' } : { outcome: 'skip', reason: 'not yet' };
+    const { service, gateway } = makeService({ policy });
+
+    expect(await requestTimes(service, 4)).toBe(0);
+    expect(gateway.requestedCount).toBe(0);
+
+    expect(await service.requestReviewIfAppropriate()).toBe(true);
     expect(gateway.requestedCount).toBe(1);
   });
 

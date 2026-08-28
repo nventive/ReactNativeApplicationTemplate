@@ -6,7 +6,7 @@ import { useServices } from '../../framework/composition/ServicesProvider';
 import { useObservable } from '../hooks/useObservable';
 import { queryKeys } from '../queryKeys';
 
-const NO_FAVORITES: Joke[] = [];
+const NO_FAVORITES: readonly Joke[] = [];
 
 /**
  * Thin binding from the jokes service to React — both data paths side by side:

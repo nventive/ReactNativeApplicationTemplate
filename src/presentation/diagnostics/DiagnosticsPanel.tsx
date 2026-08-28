@@ -74,9 +74,7 @@ export function DiagnosticsPanel({
             testID="DiagnosticsDisable"
             variant="outline"
             label={t('diagnostics.disable')}
-            onPress={() => {
-              void diagnostics.disablePermanently();
-            }}
+            onPress={() => diagnostics.disablePermanently()}
           />
         </View>
       </ScrollView>

@@ -44,6 +44,7 @@ import { ExpoSecureStore } from '../../access/storage/ExpoSecureStore';
 import type { KeyValueStore } from '../../access/storage/KeyValueStore';
 import { MmkvKeyValueStore } from '../../access/storage/MmkvKeyValueStore';
 import type { SecureStore } from '../../access/storage/SecureStore';
+import { createDefaultAppReviewPolicy } from '../../business/appReview/AppReviewPolicy';
 import { DefaultAppReviewService } from '../../business/appReview/DefaultAppReviewService';
 import type { AppReviewService } from '../../business/appReview/AppReviewService';
 import { DefaultDiagnosticsService } from '../../business/diagnostics/DefaultDiagnosticsService';
@@ -311,9 +312,19 @@ export function createServices(overrides: ServiceOverrides = {}): Services {
   const appReviewGateway =
     overrides.appReviewGateway ??
     (mockingEnabled ? new InMemoryAppReviewGateway() : new ExpoStoreReviewGateway());
+  // The *when-to-prompt* rule. `createDefaultAppReviewPolicy()` is "N positive
+  // signals, then once per version"; pass a threshold (e.g.
+  // `createDefaultAppReviewPolicy(5)`) or a custom `AppReviewPolicy` here to tune
+  // it per app — see `src/business/appReview/AppReviewPolicy.ts`.
   const appReview =
     overrides.appReview ??
-    new DefaultAppReviewService(appReviewGateway, keyValueStore, currentVersionRepository, logger);
+    new DefaultAppReviewService(
+      appReviewGateway,
+      keyValueStore,
+      currentVersionRepository,
+      logger,
+      createDefaultAppReviewPolicy(),
+    );
 
   return {
     logger,

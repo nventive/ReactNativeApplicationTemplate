@@ -32,11 +32,11 @@ describe('DefaultDiagnosticsService', () => {
     expect(new DefaultDiagnosticsService(store, true).isAvailable()).toBe(true);
   });
 
-  it('disablePermanently persists and survives a relaunch', async () => {
+  it('disablePermanently persists and survives a relaunch', () => {
     const store = new InMemoryKeyValueStore();
     const service = new DefaultDiagnosticsService(store, true);
 
-    await service.disablePermanently();
+    service.disablePermanently();
 
     expect(service.isAvailable()).toBe(false);
     expect(store.getBoolean(DIAGNOSTICS_DISABLED_KEY)).toBe(true);

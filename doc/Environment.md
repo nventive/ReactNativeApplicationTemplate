@@ -71,4 +71,6 @@ constructor, so Tier-1 tests drive it with an `InMemoryKeyValueStore` and an
 explicit default — no expo-constants, no native modules
 ([test](../test/business/environment/DefaultEnvironmentService.test.ts)).
 `MockEnvironmentService` is a no-persistence fake for consumers that just need a
-fixed environment.
+fixed environment; it still drives `pending$` exactly like the real service
+(`setEnvironment`/`reset`, including `reset()` raising the build default as
+pending), so tests can rely on the same behavior.
