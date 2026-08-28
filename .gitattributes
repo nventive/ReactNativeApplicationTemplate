@@ -1,0 +1,19 @@
+# Enforce LF line endings for all text files — in the repository and in the
+# working tree on every platform. Without this, `core.autocrlf=true` checks
+# files out with CRLF on Windows, which Prettier (`endOfLine: lf`) then flags on
+# every line, making `yarn lint` red locally even though the committed blobs are
+# LF. `text=auto` lets Git auto-detect and leave binary files untouched.
+* text=auto eol=lf
+
+# Belt-and-braces: never normalize these binary types.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.keystore binary
+*.jks binary
+*.p12 binary
+*.mobileprovision binary
