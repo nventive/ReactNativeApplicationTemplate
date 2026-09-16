@@ -83,8 +83,11 @@ Maestro `appId`s, the CI signing conventions, and the Firebase example configs).
 - **Scrubbed in place** (regions bracketed by `template-only` markers, so the rest
   of each file survives): the `Template_Validation` stage in
   `build/azure-pipelines.yml` and its section in `doc/AzurePipelines.md`; the
-  "this repository is a template" framing in `CLAUDE.md`; and the doc index's link
-  to this page in `doc/README.md`. Prose that describes the app rather than the
+  "this repository is a template" framing in `CLAUDE.md`; the doc index's link
+  to this page in `doc/README.md`; and the pointers to
+  `.github/copilot-instructions.md` in `doc/Architecture.md`, `doc/DadJokes.md`,
+  and `doc/GettingStarted.md` (the whole `.github/` folder is removed, so those
+  links would otherwise dangle). Prose that describes the app rather than the
   template is reworded at the source, so it needs no marker.
 - **Formatting**: files it edited are re-run through Prettier, because shortening
   or lengthening an identifier can change how a line wraps.
@@ -114,9 +117,11 @@ pure functions in `cli/generate.ts`:
   shorter one can never partially match a longer one.
 - `stripTemplateOnlyBlocks` removes each `template-only:begin`…`template-only:end`
   region from the files that must survive generation (the `Template_Validation`
-  stage in the pipeline and its doc, the template framing in `CLAUDE.md`, and the
-  generator link in the doc index), so each keeps everything *except* the marked
-  block. `stripTemplateOnlyBlocksInFiles` applies it to that file list.
+  stage in the pipeline and its doc, the template framing in `CLAUDE.md`, the
+  generator link in the doc index, and the Copilot-instructions pointers in the
+  architecture, Dad Jokes, and getting-started pages), so each keeps everything
+  *except* the marked block. `stripTemplateOnlyBlocksInFiles` applies it to that
+  file list.
 - `generate` orchestrates substitution, README rewrite, cleanup, un-wiring, and
   the block strip; `formatFiles` runs the Prettier pass.
 

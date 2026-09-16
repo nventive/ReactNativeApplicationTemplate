@@ -481,8 +481,10 @@ export function stripTemplateOnlyBlocks(content: string): string {
 /**
  * Files (relative to the project root) that carry `template-only` regions the
  * generated app must not keep — e.g. the CI stage that runs this generator, the
- * "this repository is a template" framing in `CLAUDE.md`, and the doc-index link
- * to the (deleted) generator page. Deleting the generator's `cli` folder handles
+ * "this repository is a template" framing in `CLAUDE.md`, the doc-index link
+ * to the (deleted) generator page, and the doc cross-references to
+ * `.github/copilot-instructions.md` (the whole `.github` folder is removed, so
+ * those links would dangle). Deleting the generator's `cli` folder handles
  * the code; these files instead have a marked region scrubbed in place so the
  * rest of the file (the real pipeline, the architecture guidance, the rest of the
  * index) survives.
@@ -492,6 +494,9 @@ export const FILES_WITH_TEMPLATE_ONLY_BLOCKS: readonly string[] = [
   'doc/AzurePipelines.md',
   'CLAUDE.md',
   'doc/README.md',
+  'doc/Architecture.md',
+  'doc/DadJokes.md',
+  'doc/GettingStarted.md',
 ];
 
 /**
@@ -579,9 +584,10 @@ export function generate(
     // Once the cli folder is removed, its references in the tooling would break
     // the quality gates; strip them so the generated project stays green. Also
     // scrub every `template-only` region — the CI stage that drives this
-    // generator, the doc-index link to the deleted generator page, and the
-    // "this repository is a template" framing in CLAUDE.md / the doc index — so a
-    // generated app reads as an app, not the template it was stamped from.
+    // generator, the doc-index link to the deleted generator page, the
+    // "this repository is a template" framing in CLAUDE.md / the doc index, and
+    // the doc cross-references to the removed `.github/copilot-instructions.md`
+    // — so a generated app reads as an app, not the template it was stamped from.
     if (!dryRun) {
       unwired = [...unwireGeneratorTooling(root), ...stripTemplateOnlyBlocksInFiles(root)];
     }

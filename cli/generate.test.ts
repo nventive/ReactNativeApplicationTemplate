@@ -375,6 +375,51 @@ describe('generate (filesystem)', () => {
       ].join('\n'),
     );
     writeFileSync(join(root, 'README.md'), '# Template');
+    // Permanent doc pages that point at `.github/copilot-instructions.md`. The
+    // whole `.github` folder is deleted, so those pointers sit in `template-only`
+    // blocks and are scrubbed in place; the surrounding guidance stays.
+    writeFileSync(
+      join(root, 'doc', 'Architecture.md'),
+      [
+        '# Architecture',
+        '',
+        'The layer boundaries every generated app keeps.',
+        '',
+        '<!-- template-only:begin -->',
+        'GitHub Copilot reads the same guidance from',
+        '[.github/copilot-instructions.md](../.github/copilot-instructions.md).',
+        '<!-- template-only:end -->',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(root, 'doc', 'DadJokes.md'),
+      [
+        '# The Dad Jokes sample feature',
+        '',
+        'The canonical vertical slice.',
+        '',
+        '<!-- template-only:begin -->',
+        'The same recipe is mirrored in',
+        '[.github/copilot-instructions.md](../.github/copilot-instructions.md).',
+        '<!-- template-only:end -->',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(root, 'doc', 'GettingStarted.md'),
+      [
+        '# Getting Started',
+        '',
+        'The verify loop every change must pass.',
+        '',
+        '<!-- template-only:begin -->',
+        'The same requirement is stated in',
+        '[.github/copilot-instructions.md](../.github/copilot-instructions.md).',
+        '<!-- template-only:end -->',
+        '',
+      ].join('\n'),
+    );
   });
 
   afterEach(() => {
@@ -488,6 +533,32 @@ describe('generate (filesystem)', () => {
     expect(docIndex).toContain('[AzurePipelines.md](AzurePipelines.md)');
 
     expect(result.unwired).toEqual(expect.arrayContaining(['CLAUDE.md', 'doc/README.md']));
+  });
+
+  it('scrubs the Copilot-instructions pointers from the docs that survive generation', () => {
+    const result = generate(root, ACME);
+
+    // `.github` is deleted wholesale, so every link into it must be gone from the
+    // permanent doc pages — otherwise a generated app ships dangling links.
+    for (const page of ['Architecture.md', 'DadJokes.md', 'GettingStarted.md']) {
+      const content = readFileSync(join(root, 'doc', page), 'utf8');
+      expect(content).not.toContain('copilot-instructions');
+      expect(content).not.toContain('template-only');
+    }
+    // The surrounding guidance survives the scrub.
+    expect(readFileSync(join(root, 'doc', 'Architecture.md'), 'utf8')).toContain(
+      'The layer boundaries every generated app keeps.',
+    );
+    expect(readFileSync(join(root, 'doc', 'DadJokes.md'), 'utf8')).toContain(
+      'The canonical vertical slice.',
+    );
+    expect(readFileSync(join(root, 'doc', 'GettingStarted.md'), 'utf8')).toContain(
+      'The verify loop every change must pass.',
+    );
+
+    expect(result.unwired).toEqual(
+      expect.arrayContaining(['doc/Architecture.md', 'doc/DadJokes.md', 'doc/GettingStarted.md']),
+    );
   });
 
   it('un-wires the generator from package.json and jest.config.js when cli is removed', () => {

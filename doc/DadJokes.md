@@ -1,13 +1,16 @@
 # The Dad Jokes sample feature
 
 Dad Jokes is the app's **canonical vertical slice** — the reference every
-new feature is cloned from, following the recipe in the agent instructions
-([CLAUDE.md](../CLAUDE.md#adding-a-feature-the-canonical-recipe),
-[.github/copilot-instructions.md](../.github/copilot-instructions.md#adding-a-feature-foo)).
-It exercises
+new feature is cloned from, following the recipe in
+[CLAUDE.md](../CLAUDE.md#adding-a-feature-the-canonical-recipe). It exercises
 every pattern the architecture names: interface + real + mock at the Access
 boundary, an RxJS source of truth in Business, and the two data paths (React
 Query + `useObservable`) in Presentation.
+
+<!-- template-only:begin -->
+The same recipe is mirrored for GitHub Copilot in
+[.github/copilot-instructions.md](../.github/copilot-instructions.md#adding-a-feature-foo).
+<!-- template-only:end -->
 
 ## The slice, layer by layer
 
