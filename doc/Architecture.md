@@ -71,7 +71,9 @@ const favorites = useObservable(jokes.favorites$, []);
 
 `src/{access,business,presentation}/jokes/` is the canonical vertical slice, and
 the **copy-me example** every new feature is cloned from following the recipe in
-[CLAUDE.md](../CLAUDE.md). It is complete: real HTTP (zod-parsed) + mock
+the agent instructions ([CLAUDE.md](../CLAUDE.md),
+[.github/copilot-instructions.md](../.github/copilot-instructions.md)). It is
+complete: real HTTP (zod-parsed) + mock
 repositories, favorites as a persisted `BehaviorSubject` source of truth,
 list/detail navigation, and the [design system](DesignSystem.md). Read
 [DadJokes.md](DadJokes.md) for the full file-by-file walkthrough before starting

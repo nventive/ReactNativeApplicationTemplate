@@ -87,6 +87,8 @@ npx expo prebuild --clean
 yarn typecheck && yarn lint && yarn test
 ```
 
-This must pass before proposing any change (see
-[CLAUDE.md](../CLAUDE.md)). It is the same sequence CI runs on every PR
+This must pass before proposing any change (see the agent instructions:
+[CLAUDE.md](../CLAUDE.md),
+[.github/copilot-instructions.md](../.github/copilot-instructions.md)). It is
+the same sequence CI runs on every PR
 ([AzurePipelines.md](AzurePipelines.md)).
